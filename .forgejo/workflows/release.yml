@@ -19,7 +19,6 @@ on:
         default: false
 
 env:
-  PICO_SDK_VERSION: "2.2.0"
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
   PRERELEASE: ${{ github.event.inputs.prerelease }}
   TOKEN: ${{ github.token }}
@@ -28,37 +27,20 @@ jobs:
   release:
     runs-on: docker
     container:
-      # same gcc-arm-none-eabi 13.2 as the Ubuntu 24.04 dev machine
-      image: ubuntu:24.04
+      # ci/builder/Dockerfile, built on the runner's Docker host by
+      # ci/builder/build-image.sh: toolchain, Pico SDK and picotool included
+      image: picocalc-builder:2.2.0
     steps:
-      - name: Install the toolchain
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -q
-          apt-get install -y -q --no-install-recommends \
-            build-essential cmake git python3 ca-certificates curl \
-            gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
-
       - name: Check out the tag
         run: |
-          git config --global --add safe.directory '*'
           git clone --quiet --branch "$TAG" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" src
           # z80pack and pico_fatfs come from GitHub at the commits the tag pins
           git -C src submodule update --init --depth 1
           git -C src log -1 --oneline
           git -C src submodule status
 
-      - name: Fetch the Pico SDK
-        run: |
-          git clone --quiet --depth 1 --branch "$PICO_SDK_VERSION" \
-            --recurse-submodules --shallow-submodules \
-            https://github.com/raspberrypi/pico-sdk.git pico-sdk
-
       - name: Build every board
         run: |
-          export PICO_SDK_PATH="$PWD/pico-sdk"
-          # one picotool build shared by all five board builds
-          export PICOTOOL_FETCH_FROM_GIT_PATH="$PWD/picotool"
           export DEPLOY="$PWD/dist"
           cd src && ./build.sh all "$TAG"
 
