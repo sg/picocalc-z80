@@ -1,0 +1,386 @@
+Z80/8080-Macro-Assembler  Release 2.1
+
+LOC   OBJECT CODE   LINE   STMT SOURCE CODE
+                       1      1 ;	8080 CBIOS for z80pack machines using SD-FDC
+                       2      2 ;
+                       3      3 ;	Copyright (C) 2024 by Udo Munk
+                       4      4 ;
+                       5      5 ;	PicoCalc: added a 4 MB hard disk as drive I:. The controller already
+                       6      6 ;	carries a 4 bit drive number and byte wide track and sector, so no
+                       7      7 ;	new hardware is needed - drive 8 simply has a different geometry,
+                       8      8 ;	256 tracks of 128 sectors, and its own disk parameter block.
+                       9      9 ;
+0040  =               10     10 MSIZE	EQU	64		;CP/M memory size in kilobytes
+                      11     11 ;
+                      12     12 ;	"bias" is address offset from 3400H for memory systems
+                      13     13 ;	than 16K (referred to as "b" throughout the text).
+                      14     14 ;
+b000  =               15     15 BIAS	EQU	(MSIZE-20)*1024
+e400  =               16     16 CCP	EQU	3400H+BIAS	;base of ccp
+ec06  =               17     17 BDOS	EQU	CCP+806H	;base of bdos
+fa00  =               18     18 BIOS	EQU	CCP+1600H	;base of bios
+002c  =               19     19 NSECTS	EQU	(BIOS-CCP)/128	;warm start sector count
+0004  =               20     20 CDISK	EQU	0004H		;current disk number 0=A,...,15=P
+0003  =               21     21 IOBYTE	EQU	0003H		;Intel I/O byte
+0040  =               22     22 FDCCMD	EQU	0040H		;FDC command bytes
+0000  =               23     23 DDTRK	EQU	0		;offset for track
+0001  =               24     24 DDSEC	EQU	1		;offset for sector
+0002  =               25     25 DDLDMA	EQU	2		;offset for DMA address low
+0003  =               26     26 DDHDMA	EQU	3		;offset for DMA address high
+                      27     27 ;
+                      28     28 ;	I/O ports
+                      29     29 ;
+0000  =               30     30 CONSTA	EQU	0		;console status port
+0001  =               31     31 CONDAT	EQU	1		;console data port
+0004  =               32     32 FDC	EQU	4		;port for the FDC
+                      33     33 ;
+                      34     34 	ORG	BIOS		;origin of BIOS
+                      35     35 ;
+                      36     36 ;	jump vector for individual subroutines
+                      37     37 ;
+fa00  c3 f0 fa        38     38 	JMP	BOOT		;cold boot
+fa03  c3 14 fb        39     39 WBE	JMP	WBOOT		;warm start
+fa06  c3 82 fb        40     40 	JMP	CONST		;console status
+fa09  c3 8d fb        41     41 	JMP	CONIN		;console character in
+fa0c  c3 96 fb        42     42 	JMP	CONOUT		;console character out
+fa0f  c3 a2 fb        43     43 	JMP	LIST		;list character out
+fa12  c3 a3 fb        44     44 	JMP	PUNCH		;punch character out
+fa15  c3 a4 fb        45     45 	JMP	READER		;reader character in
+fa18  c3 a7 fb        46     46 	JMP	HOME		;move disk head to home position
+fa1b  c3 ac fb        47     47 	JMP	SELDSK		;select disk drive
+fa1e  c3 cc fb        48     48 	JMP	SETTRK		;set track number
+fa21  c3 d1 fb        49     49 	JMP	SETSEC		;set sector number
+fa24  c3 d6 fb        50     50 	JMP	SETDMA		;set dma address
+fa27  c3 df fb        51     51 	JMP	READ		;read disk sector
+fa2a  c3 e7 fb        52     52 	JMP	WRITE		;write disk sector
+fa2d  c3 a0 fb        53     53 	JMP	LISTST		;list status
+fa30  c3 f4 fb        54     54 	JMP	SECTRAN		;sector translate
+                      55     55 ;
+                      56     56 ;	data tables
+                      57     57 ;
+fa33  36 34           58     58 SIGNON	DB	MSIZE / 10 + '0',MSIZE MOD 10 + '0'
+fa35  4b 20 43 50     59     59 	DB	'K CP/M 2.2 VERS B01+HD',13,10,0
+fa39  2f 4d 20 32     59     60
+fa3d  2e 32 20 56     59     61
+fa41  45 52 53 20     59     62
+fa45  42 30 31 2b     59     63
+fa49  48 44 0d 0a     59     64
+fa4d  00              59     65
+fa4e  0d 0a 42 4f     60     66 BOOTERR	DB	13,10,'BOOT ERROR',13,10,0
+fa52  4f 54 20 45     60     67
+fa56  52 52 4f 52     60     68
+fa5a  0d 0a 00        60     69
+                      61     70 ;
+                      62     71 ;	disk parameter header for disk 0
+fa5d  ad fa 00 00     63     72 DPBASE	DW	TRANS,0000H
+fa61  00 00 00 00     64     73 	DW	0000H,0000H
+fa65  06 fc c7 fa     65     74 	DW	DIRBF,DPBLK
+fa69  02 fd 86 fc     66     75 	DW	CHK00,ALL00
+                      67     76 ;	disk parameter header for disk 1
+fa6d  ad fa 00 00     68     77 	DW	TRANS,0000H
+fa71  00 00 00 00     69     78 	DW	0000H,0000H
+fa75  06 fc c7 fa     70     79 	DW	DIRBF,DPBLK
+fa79  12 fd a5 fc     71     80 	DW	CHK01,ALL01
+                      72     81 ;	disk parameter header for disk 2
+fa7d  ad fa 00 00     73     82 	DW	TRANS,0000H
+fa81  00 00 00 00     74     83 	DW	0000H,0000H
+fa85  06 fc c7 fa     75     84 	DW	DIRBF,DPBLK
+fa89  22 fd c4 fc     76     85 	DW	CHK02,ALL02
+                      77     86 ;	disk parameter header for disk 3
+fa8d  ad fa 00 00     78     87 	DW	TRANS,0000H
+fa91  00 00 00 00     79     88 	DW	0000H,0000H
+fa95  06 fc c7 fa     80     89 	DW	DIRBF,DPBLK
+fa99  32 fd e3 fc     81     90 	DW	CHK03,ALL03
+                      82     91 ;
+                      83     92 ;	disk parameter header for the hard disk, drive I:
+                      84     93 ;	no translate table, and no check vector because the media is fixed
+fa9d  00 00 00 00     85     94 DPHHD	DW	0000H,0000H
+faa1  00 00 00 00     86     95 	DW	0000H,0000H
+faa5  06 fc d6 fa     87     96 	DW	DIRBF,DPBHD
+faa9  00 00 42 fd     88     97 	DW	0000H,ALLHD
+                      89     98 ;
+                      90     99 ;	sector translate table for IBM 8" SD disks
+faad  01 07 0d 13     91    100 TRANS	DB	1,7,13,19	;sectors 1,2,3,4
+fab1  19 05 0b 11     92    101 	DB	25,5,11,17	;sectors 5,6,7,8
+fab5  17 03 09 0f     93    102 	DB	23,3,9,15	;sectors 9,10,11,12
+fab9  15 02 08 0e     94    103 	DB	21,2,8,14	;sectors 13,14,15,16
+fabd  14 1a 06 0c     95    104 	DB	20,26,6,12	;sectors 17,18,19,20
+fac1  12 18 04 0a     96    105 	DB	18,24,4,10	;sectors 21,22,23,24
+fac5  10 16           97    106 	DB	16,22		;sectors 25,26
+                      98    107 ;
+                      99    108 ;	disk parameter block for IBM 8" SD disks
+fac7  1a 00          100    109 DPBLK	DW	26		;sectors per track
+fac9  03             101    110 	DB	3		;block shift factor
+faca  07             102    111 	DB	7		;block mask
+facb  00             103    112 	DB	0		;extent mask
+facc  f2 00          104    113 	DW	242		;disk size-1
+face  3f 00          105    114 	DW	63		;directory max
+fad0  c0             106    115 	DB	192		;alloc 0
+fad1  00             107    116 	DB	0		;alloc 1
+fad2  10 00          108    117 	DW	16		;check size
+fad4  02 00          109    118 	DW	2		;track offset
+                     110    119 ;
+                     111    120 ;	disk parameter block for the 4 MB hard disk
+                     112    121 ;	2048 byte blocks, 2048 of them, 512 directory entries
+fad6  80 00          113    122 DPBHD	DW	128		;sectors per track
+fad8  04             114    123 	DB	4		;block shift factor
+fad9  0f             115    124 	DB	15		;block mask
+fada  00             116    125 	DB	0		;extent mask
+fadb  ff 07          117    126 	DW	2047		;disk size-1
+fadd  ff 01          118    127 	DW	511		;directory max
+fadf  ff             119    128 	DB	255		;alloc 0, 8 blocks of directory
+fae0  00             120    129 	DB	0		;alloc 1
+fae1  00 00          121    130 	DW	0		;check size, 0 for fixed media
+fae3  00 00          122    131 	DW	0		;track offset
+                     123    132 ;
+                     124    133 ;	print a message to the console
+                     125    134 ;	pointer to string in hl
+                     126    135 ;
+fae5  7e             127    136 PRTMSG	MOV	A,M		;get next message byte
+fae6  b7             128    137 	ORA	A		;is it zero?
+fae7  c8             129    138 	RZ			;yes, done
+fae8  4f             130    139 	MOV	C,A		;no, print character on console
+fae9  cd 96 fb       131    140 	CALL	CONOUT
+faec  23             132    141 	INX	H		;and do next
+faed  c3 e5 fa       133    142 	JMP	PRTMSG
+                     134    143 ;
+                     135    144 ;	cold start
+                     136    145 ;
+faf0  31 80 00       137    146 BOOT	LXI	SP,80H		;use space below buffer for stack
+faf3  21 33 fa       138    147 	LXI	H,SIGNON	;print signon
+faf6  cd e5 fa       139    148 	CALL	PRTMSG
+faf9  af             140    149 	XRA	A		;zero in the accumulator
+fafa  32 04 00       141    150 	STA	CDISK		;select disk drive 0
+fafd  32 05 fc       142    151 	STA	DSKNO
+fb00  32 03 00       143    152 	STA	IOBYTE		;setup IOBYTE
+fb03  3e 10          144    153 	MVI	A,10H		;setup FDC command
+fb05  d3 04          145    154 	OUT	FDC
+fb07  3e 40          146    155 	MVI	A,FDCCMD AND 0FFH
+fb09  d3 04          147    156 	OUT	FDC
+fb0b  3e 00          148    157 	MVI	A,FDCCMD SHR 8
+fb0d  d3 04          149    158 	OUT	FDC
+fb0f  37             150    159 	STC			;flag for cold start
+fb10  3f             151    160 	CMC
+fb11  c3 5e fb       152    161 	JMP	GOCPM		;initialize and go to CP/M
+                     153    162 ;
+                     154    163 ;	warm start
+                     155    164 ;
+fb14  31 80 00       156    165 WBOOT	LXI	SP,80H		;use space below buffer for stack
+fb17  0e 00          157    166 	MVI	C,0		;select disk 0
+fb19  cd ac fb       158    167 	CALL	SELDSK
+fb1c  cd a7 fb       159    168 	CALL	HOME		;go to track 0
+fb1f  06 2c          160    169 	MVI	B,NSECTS	;B counts # of sectors to load
+fb21  0e 00          161    170 	MVI	C,0		;C has the current track #
+fb23  16 02          162    171 	MVI	D,2		;D has the next sector to load
+fb25  21 00 e4       163    172 	LXI	H,CCP		;base of CP/M
+fb28  c5             164    173 LOAD1	PUSH	B		;save sector count and current track
+fb29  d5             165    174 	PUSH	D		;save next sector to read
+fb2a  e5             166    175 	PUSH	H		;save DMA address
+fb2b  4a             167    176 	MOV	C,D		;get sector address to C
+fb2c  cd d1 fb       168    177 	CALL	SETSEC		;set sector address
+fb2f  c1             169    178 	POP	B		;recall DMA address to BC
+fb30  c5             170    179 	PUSH	B		;and replace on stack for later recall
+fb31  cd d6 fb       171    180 	CALL	SETDMA		;set DMA address from BC
+fb34  cd df fb       172    181 	CALL	READ		;read sector
+fb37  b7             173    182 	ORA	A		;any errors?
+fb38  ca 42 fb       174    183 	JZ	LOAD2		;no, continue
+fb3b  21 4e fa       175    184 	LXI	H,BOOTERR	;otherwise print message
+fb3e  cd e5 fa       176    185 	CALL	PRTMSG
+fb41  76             177    186 	HLT			;and halt the machine
+fb42  e1             178    187 LOAD2	POP	H		;recall DMA address
+fb43  11 80 00       179    188 	LXI	D,128		;DMA = DMA + 128
+fb46  19             180    189 	DAD	D		;next DMA address now in HL
+fb47  d1             181    190 	POP	D		;recall sector address
+fb48  c1             182    191 	POP	B		;recall # of sectors remaining
+fb49  05             183    192 	DCR	B		;sectors = sectors - 1
+fb4a  37             184    193 	STC			;flag for warm start
+fb4b  ca 5e fb       185    194 	JZ	GOCPM		;transfer to CP/M if all loaded
+fb4e  14             186    195 	INR	D		;next sector
+fb4f  7a             187    196 	MOV	A,D		;sector = 27 ?
+fb50  fe 1b          188    197 	CPI	27
+fb52  da 28 fb       189    198 	JC	LOAD1		;no, continue
+fb55  16 01          190    199 	MVI	D,1		;else begin with sector 1 on next track
+fb57  0c             191    200 	INR	C
+fb58  cd cc fb       192    201 	CALL	SETTRK
+fb5b  c3 28 fb       193    202 	JMP	LOAD1		;for another sector
+fb5e  3e c3          194    203 GOCPM	MVI	A,0C3H		;C3 is a JMP instruction
+fb60  32 00 00       195    204 	STA	0		;for jmp to wboot
+fb63  21 03 fa       196    205 	LXI	H,WBE		;WBOOT entry point
+fb66  22 01 00       197    206 	SHLD	1		;set address for JMP at 0
+fb69  32 05 00       198    207 	STA	5		;for JMP to BDOS
+fb6c  21 06 ec       199    208 	LXI	H,BDOS		;BDOS entry point
+fb6f  22 06 00       200    209 	SHLD	6		;set address for JMP at 5
+fb72  01 80 00       201    210 	LXI	B,80H		;default dma address is 80H
+fb75  cd d6 fb       202    211 	CALL	SETDMA
+fb78  3a 04 00       203    212 	LDA	CDISK		;get current disk number
+fb7b  4f             204    213 	MOV	C,A		;send to the CCP
+fb7c  da 03 e4       205    214 	JC	CCP+3		;go to CCP warm start
+fb7f  c3 00 e4       206    215 	JMP	CCP		;go to CCP cold start
+                     207    216 ;
+                     208    217 ;	console status, return 0FFH if character ready, 00H if not
+                     209    218 ;
+fb82  db 00          210    219 CONST	IN	CONSTA		;get console status
+fb84  0f             211    220 	RRC			;test bit 0
+fb85  da 8b fb       212    221 	JC	CONST1		;not ready
+fb88  3e ff          213    222 	MVI	A,0FFH		;ready, set flag
+fb8a  c9             214    223 	RET
+fb8b  af             215    224 CONST1	XRA	A		;zero A
+fb8c  c9             216    225 	RET
+                     217    226 ;
+                     218    227 ;	console input character into register A
+                     219    228 ;
+fb8d  db 00          220    229 CONIN	IN	CONSTA		;get console status
+fb8f  0f             221    230 	RRC			;test bit 0
+fb90  da 8d fb       222    231 	JC	CONIN		;not ready
+fb93  db 01          223    232 	IN	CONDAT		;get character from console
+fb95  c9             224    233 	RET
+                     225    234 ;
+                     226    235 ;	console output
+                     227    236 ;
+fb96  db 00          228    237 CONOUT	IN	CONSTA		;get status
+fb98  07             229    238 	RLC			;test bit 7
+fb99  da 96 fb       230    239 	JC	CONOUT		;wait until transmitter ready
+fb9c  79             231    240 	MOV	A,C		;get character into accumulator
+fb9d  d3 01          232    241 	OUT	CONDAT		;send to console
+fb9f  c9             233    242 	RET
+                     234    243 ;
+                     235    244 ;	printer status, return 0FFH if character ready, 00H if not
+                     236    245 ;
+fba0  af             237    246 LISTST	XRA	A		;we have no printer
+fba1  c9             238    247 	RET			;so never ready
+                     239    248 ;
+                     240    249 ;	line printer output
+                     241    250 ;
+fba2  c9             242    251 LIST	RET			;we have no printer
+                     243    252 ;
+                     244    253 ;	punch character from register C
+                     245    254 ;
+fba3  c9             246    255 PUNCH	RET			;we have no puncher
+                     247    256 ;
+                     248    257 ;	read character into register A from reader
+                     249    258 ;
+fba4  3e 1a          250    259 READER	MVI	A,01AH		;we have no reader
+fba6  c9             251    260 	RET			;so return CTL-Z
+                     252    261 ;
+                     253    262 ;	move to track 0 position on current disk
+                     254    263 ;
+fba7  0e 00          255    264 HOME	MVI	C,0		;select track 0
+fba9  c3 cc fb       256    265 	JMP	SETTRK
+                     257    266 ;
+                     258    267 ;	select disk given by register C
+                     259    268 ;
+fbac  21 00 00       260    269 SELDSK	LXI	H,0		;error return code
+fbaf  79             261    270 	MOV	A,C		;get disk # to accumulator
+fbb0  fe 04          262    271 	CPI	4		;disk drive < 4 ?
+fbb2  da bf fb       263    272 	JC	SEL1
+fbb5  fe 08          264    273 	CPI	8		;the hard disk is drive I:
+fbb7  c0             265    274 	RNZ			;anything else does not exist
+fbb8  32 05 fc       266    275 	STA	DSKNO		;save disk #
+fbbb  21 9d fa       267    276 	LXI	H,DPHHD		;HL=.DPHHD
+fbbe  c9             268    277 	RET
+fbbf  32 05 fc       269    278 SEL1	STA	DSKNO		;save disk #
+fbc2  69             270    279 	MOV	L,C		;HL = disk #
+fbc3  29             271    280 	DAD	H		;*2
+fbc4  29             272    281 	DAD	H		;*4
+fbc5  29             273    282 	DAD	H		;*8
+fbc6  29             274    283 	DAD	H		;*16 (size of each header)
+fbc7  11 5d fa       275    284 	LXI	D,DPBASE
+fbca  19             276    285 	DAD	D		;HL=.DPBASE(DISKNO*16)
+fbcb  c9             277    286 	RET
+                     278    287 ;
+                     279    288 ;	set track given by register C
+                     280    289 ;
+fbcc  79             281    290 SETTRK	MOV	A,C		;get to accumulator
+fbcd  32 40 00       282    291 	STA	FDCCMD+DDTRK	;set in FDC command
+fbd0  c9             283    292         RET
+                     284    293 ;
+                     285    294 ;	set sector given by register C
+                     286    295 ;
+fbd1  79             287    296 SETSEC	MOV	A,C		;get to accumulator
+fbd2  32 41 00       288    297 	STA     FDCCMD+DDSEC	;set in FDC command
+fbd5  c9             289    298         RET
+                     290    299 ;
+                     291    300 ;	set DMA address given by registers B and C
+                     292    301 ;
+fbd6  79             293    302 SETDMA	MOV	A,C		;low order address
+fbd7  32 42 00       294    303 	STA	FDCCMD+DDLDMA	;set in FDC command
+fbda  78             295    304 	MOV	A,B		;high order address
+fbdb  32 43 00       296    305 	STA	FDCCMD+DDHDMA	;set in FDC command
+fbde  c9             297    306         RET
+                     298    307 ;
+                     299    308 ;	perform read operation
+                     300    309 ;
+fbdf  3a 05 fc       301    310 READ	LDA     DSKNO		;get disk #
+fbe2  f6 20          302    311 	ORI	20H		;mask in read command
+fbe4  c3 ef fb       303    312         JMP     DOIO            ;do I/O operation
+                     304    313 ;
+                     305    314 ;	perform write operation
+                     306    315 ;
+fbe7  3a 05 fc       307    316 WRITE	LDA	DSKNO		;get disk #
+fbea  f6 40          308    317 	ORI	40H		;mask in write command
+fbec  c3 ef fb       309    318 	JMP	DOIO		;do I/O operation
+                     310    319 ;
+                     311    320 ;	perform read/write I/O
+                     312    321 ;
+fbef  d3 04          313    322 DOIO	OUT	FDC		;ask FDC to execute the command
+fbf1  db 04          314    323 	IN	FDC		;get status from FDC
+fbf3  c9             315    324         RET
+                     316    325 ;
+                     317    326 ;	translate the sector given by BC using
+                     318    327 ;	the translation table given by DE
+                     319    328 ;
+fbf4  7a             320    329 SECTRAN	MOV	A,D		;no translate table ?
+fbf5  b3             321    330 	ORA	E
+fbf6  c2 fd fb       322    331 	JNZ	SECT1
+fbf9  60             323    332 	MOV	H,B		;HL=sector
+fbfa  69             324    333 	MOV	L,C
+fbfb  23             325    334 	INX	H		;the controller numbers sectors from 1
+fbfc  c9             326    335 	RET
+fbfd  eb             327    336 SECT1	XCHG			;HL=.TRANS
+fbfe  09             328    337 	DAD	B               ;HL=.TRANS(SECTOR)
+fbff  eb             329    338 	XCHG
+fc00  1a             330    339 	LDAX	D
+fc01  6f             331    340 	MOV	L,A		;L=TRANS(SECTOR)
+fc02  26 00          332    341 	MVI	H,0		;HL=TRANS(SECTOR)
+fc04  c9             333    342 	RET			;with value in HL
+                     334    343 ;
+                     335    344 ;	The remainder of the CBIOS is reserved uninitialized
+                     336    345 ;	data area, and does not need to be part of the system
+                     337    346 ;	memory image. The space must be available, however,
+                     338    347 ;	between "BEGDAT" and "ENDDAT".
+                     339    348 ;
+fc05  =              340    349 BEGDAT	EQU	$		;begin of data area
+                     341    350 ;
+fc05                 342    351 DSKNO	DS	1		;selected disk
+                     343    352 ;
+fc06                 344    353 DIRBF	DS	128		;scratch directory area
+fc86                 345    354 ALL00	DS	31		;allocation vector 0
+fca5                 346    355 ALL01	DS	31		;allocation vector 1
+fcc4                 347    356 ALL02	DS	31		;allocation vector 2
+fce3                 348    357 ALL03	DS	31		;allocation vector 3
+fd02                 349    358 CHK00	DS	16		;check vector 0
+fd12                 350    359 CHK01	DS	16		;check vector 1
+fd22                 351    360 CHK02	DS	16		;check vector 2
+fd32                 352    361 CHK03	DS	16		;check vector 3
+fd42                 353    362 ALLHD	DS	256		;allocation vector for the hard disk
+                     354    363 ;
+fe42  =              355    364 ENDDAT	EQU	$		;end of data area
+023d  =              356    365 DATSIZ	EQU	$-BEGDAT	;size of data area
+                     357    366 ;
+fe42                 358    367 	END			;of CBIOS
+
+Symbol table
+
+ALL00   fc86    ALL01   fca5    ALL02   fcc4    ALL03   fce3    ALLHD   fd42
+BDOS    ec06    BEGDAT  fc05    BIAS    b000    BIOS    fa00    BOOT    faf0
+BOOTERR fa4e    CCP     e400    CDISK   0004    CHK00   fd02    CHK01   fd12
+CHK02   fd22    CHK03   fd32    CONDAT  0001    CONIN   fb8d    CONOUT  fb96
+CONST   fb82    CONST1  fb8b    CONSTA  0000    DATSIZ  023d*   DDHDMA  0003
+DDLDMA  0002    DDSEC   0001    DDTRK   0000    DIRBF   fc06    DOIO    fbef
+DPBASE  fa5d    DPBHD   fad6    DPBLK   fac7    DPHHD   fa9d    DSKNO   fc05
+ENDDAT  fe42*   FDC     0004    FDCCMD  0040    GOCPM   fb5e    HOME    fba7
+IOBYTE  0003    LIST    fba2    LISTST  fba0    LOAD1   fb28    LOAD2   fb42
+MSIZE   0040    NSECTS  002c    PRTMSG  fae5    PUNCH   fba3    READ    fbdf
+READER  fba4    SECT1   fbfd    SECTRAN fbf4    SEL1    fbbf    SELDSK  fbac
+SETDMA  fbd6    SETSEC  fbd1    SETTRK  fbcc    SIGNON  fa33    TRANS   faad
+WBE     fa03    WBOOT   fb14    WRITE   fbe7

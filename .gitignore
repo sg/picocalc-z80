@@ -1,0 +1,21 @@
+*.swp
+/build/
+/build-*/
+.vscode
+__pycache__/
+
+# host tools and their scratch disks
+/tools/hostsim/hostsim
+/tools/hostsim/modemtest
+/tools/hostsim/*.dsk
+/tools/hostsim/*.hdd
+
+# CP/M software collected locally, not ours to publish
+/cpm-files/
+
+# working copies and archives in the project root
+/*.dsk
+/*.tgz
+
+# the config file holds the WiFi password
+PCALC.DAT

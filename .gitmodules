@@ -1,0 +1,7 @@
+[submodule "submodules/z80pack"]
+	path = submodules/z80pack
+	url = https://github.com/udo-munk/z80pack.git
+	branch = dev
+[submodule "submodules/pico_fatfs"]
+	path = submodules/pico_fatfs
+	url = https://github.com/elehobica/pico_fatfs.git
