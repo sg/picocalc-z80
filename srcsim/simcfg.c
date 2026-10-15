@@ -15,6 +15,7 @@
  * 24-MAY-2025 separate read/save config file from config and add network config
  */
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -443,6 +444,24 @@ void net_autoconnect(void)
 }
 #endif
 
+#define SGR_KEY		"\033[96m"
+#define SGR_LABEL	"\033[93m"
+#define SGR_OFF		"\033[0m"
+
+static void menu_item(char key, const char *label, const char *fmt, ...)
+{
+	va_list ap;
+
+	printf(SGR_KEY "%c" SGR_OFF " - " SGR_LABEL "%s" SGR_OFF, key, label);
+	if (fmt != NULL) {
+		putchar(' ');
+		va_start(ap, fmt);
+		vprintf(fmt, ap);
+		va_end(ap);
+	}
+	putchar('\n');
+}
+
 /*
  * The status block takes the rows the terminal is denied, below the panel's
  * scroll area so that it holds still while the text scrolls.
@@ -519,41 +538,41 @@ void config(void)
 	while (!go_flag) {
 		if (menu) {
 			rtc_get_datetime(&t);
-			printf("Current time: %s %04d-%02d-%02d "
+			printf(SGR_LABEL "Current time:" SGR_OFF " %s %04d-%02d-%02d "
 			       "%02d:%02d:%02d\n", dotw[t.dotw],
 			       t.year, t.month, t.day, t.hour, t.min, t.sec);
 #ifdef PICOCALC_WIFI
 			net_status(s_net, sizeof(s_net));
-			printf("n - network: %s\n", s_net);
+			menu_item('n', "network:", "%s", s_net);
 #endif
-			printf("v - font: %s (%dx%d)\n",
-			       font_file[0] ? font_file : "built-in",
-			       term_get_width(), term_get_height());
-			printf("k - arrow keys: %s\n",
-			       (keymap_arrows == KEYMAP_ARROWS_WORDSTAR) ?
-			       "WordStar" : "ANSI");
-			printf("a - set date\n");
-			printf("t - set time\n");
-			printf("c - switch CPU, currently %s\n",
-			       (cpu == Z80) ? "Z80" : "8080");
-			printf("s - CPU speed: ");
+			menu_item('v', "font:", "%s (%dx%d)",
+				  font_file[0] ? font_file : "built-in",
+				  term_get_width(), term_get_height());
+			menu_item('k', "arrow keys:", "%s",
+				  (keymap_arrows == KEYMAP_ARROWS_WORDSTAR) ?
+				  "WordStar" : "ANSI");
+			menu_item('a', "set date", NULL);
+			menu_item('t', "set time", NULL);
+			menu_item('c', "switch CPU, currently", "%s",
+				  (cpu == Z80) ? "Z80" : "8080");
 			if (speed == 0)
-				puts("unlimited");
+				menu_item('s', "CPU speed:", "unlimited");
 			else
-				printf("%d MHz\n", speed);
-			printf("p - Port 255 value: %02XH\n", fp_value);
-			printf("f - list files\n");
-			printf("r - load file\n");
-			printf("d - list disks\n");
-			printf("0 - Disk 0: %s\n", disks[0]);
-			printf("1 - Disk 1: %s\n", disks[1]);
-			printf("2 - Disk 2: %s\n", disks[2]);
-			printf("3 - Disk 3: %s\n", disks[3]);
-			printf("i - Hard disk I: %s\n", disks[HD_SLOT]);
-			printf("g - run machine\n\n");
+				menu_item('s', "CPU speed:", "%d MHz", speed);
+			menu_item('p', "Port 255 value:", "%02XH", fp_value);
+			menu_item('f', "list files", NULL);
+			menu_item('r', "load file", NULL);
+			menu_item('d', "list disks", NULL);
+			menu_item('0', "Disk 0:", "%s", disks[0]);
+			menu_item('1', "Disk 1:", "%s", disks[1]);
+			menu_item('2', "Disk 2:", "%s", disks[2]);
+			menu_item('3', "Disk 3:", "%s", disks[3]);
+			menu_item('i', "Hard disk I:", "%s", disks[HD_SLOT]);
+			menu_item('g', "run machine", NULL);
+			putchar('\n');
 		} else
 			menu = 1;
-		printf("Command: ");
+		printf(SGR_KEY "Command:" SGR_OFF " ");
 		get_cmdline(s, 2);
 		putchar('\n');
 

@@ -362,6 +362,19 @@ void stdio_picocalc_out_chars(const char *buf, int length) {
 							else if (a >= 100 && a <= 107) { // bright background
 								ansi.bg = palette[b + 8];
 							}
+							else if (a == 38 || a == 48) { // 2;r;g;b, the 24 bit form
+								int p[4], n = 0;
+								while (n < 4) {
+									while (semicolon < ansi.stack_size && ansi.stack[semicolon] != ';') semicolon++;
+									if (semicolon >= ansi.stack_size) break;
+									p[n++] = atoi(ansi.stack + ++semicolon);
+								}
+								if (n == 4 && p[0] == 2) {
+									u16 c = RGB(p[1] & 0xff, p[2] & 0xff, p[3] & 0xff);
+									if (a == 38) ansi.fg = c;
+									else ansi.bg = c;
+								}
+							}
 							while (semicolon < ansi.stack_size-1 && ansi.stack[semicolon] != ';') semicolon++;
 							semicolon++;
 						}
@@ -391,7 +404,7 @@ void stdio_picocalc_out_chars(const char *buf, int length) {
 					ansi.state = AnsiNone;
 					break;
 				default:
-					if (ansi.stack_size < ANSI_STACK_SIZE) ansi.stack[ansi.stack_size++] = *buf;
+					if (ansi.stack_size < ANSI_STACK_SIZE - 1) ansi.stack[ansi.stack_size++] = *buf;
 					else ansi.state = AnsiNone;
 			}
 		}

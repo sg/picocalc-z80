@@ -32,9 +32,10 @@
 #define REPAINT_MS	250
 #define BATTERY_MS	5000
 
-/* P1 phosphor, the green of the terminals this machine is pretending to be */
-#define STATUS_FG	RGB( 51, 255,  51)
-#define STATUS_DIM	RGB( 32, 176,  32)
+#define RGB_OF(c)	RGB(c)
+#define STATUS_FG	RGB_OF(STATUS_GREEN)
+/* the terminal's bright cyan, so it matches the menu letters */
+#define STATUS_DIM	RGB( 85, 255, 255)
 #define STATUS_BG	RGB(  0,   0,   0)
 
 /* the widest line the narrowest font can show */

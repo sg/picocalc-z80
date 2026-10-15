@@ -190,7 +190,8 @@ static void z80_main(void)
 #endif
 
 	/* print banner */
-	printf("\f\033[93m%s\033[0m release \033[93m%s\033[0m\n", USR_COM, USR_REL);
+	printf("\f" STATUS_GREEN_SGR "%s\033[0m release " STATUS_GREEN_SGR "%s\033[0m\n",
+	       USR_COM, USR_REL);
 	printf("running on ARM %s cores at %i MHz\n",
 #if PICO_RP2040
 	       "Cortex-M0+",

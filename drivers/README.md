@@ -78,3 +78,8 @@ its own stdio driver that pairs `stdio_picocalc_out_chars()` with a translating
 reader, because the emulated machine wants a terminal's byte stream — ESC as
 `0x1b`, cursor sequences, control codes — while the keyboard controller reports
 its own codes and the Lua REPL upstream wants those raw.
+
+- SGR accepts the 24 bit forms `38;2;r;g;b` and `48;2;r;g;b`, so text can
+  match a colour drawn directly, such as the status block's green. The
+  parameter buffer grew from 16 to 32 bytes to hold them, and no longer writes
+  its terminator one past the end when full.

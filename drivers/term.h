@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include "types.h"
 
-#define ANSI_STACK_SIZE 16
+#define ANSI_STACK_SIZE 32
 
 #define DEFAULT_FG 15
 #define DEFAULT_BG 0

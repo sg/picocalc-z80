@@ -14,6 +14,10 @@
 
 #include <stdbool.h>
 
+/* P1 phosphor, the green of the terminals this machine is pretending to be */
+#define STATUS_GREEN		51, 255, 51
+#define STATUS_GREEN_SGR	"\033[38;2;51;255;51m"
+
 /* separator plus two lines, taken off the bottom of the terminal */
 #define STATUS_ROWS 3
 
