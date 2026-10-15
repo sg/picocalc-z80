@@ -58,6 +58,24 @@ static const char *cfg = Z80_DIR CONF_FILE;
 
 char font_file[DISKLEN+1];
 
+#define SGR_KEY		"\033[96m"
+#define SGR_LABEL	"\033[93m"
+#define SGR_OFF		"\033[0m"
+
+static void menu_item(const char *key, const char *label, const char *fmt, ...)
+{
+	va_list ap;
+
+	printf(SGR_KEY "%s" SGR_OFF " - " SGR_LABEL "%s" SGR_OFF, key, label);
+	if (fmt != NULL) {
+		putchar(' ');
+		va_start(ap, fmt);
+		vprintf(fmt, ap);
+		va_end(ap);
+	}
+	putchar('\n');
+}
+
 /*
  * prompt for a filename
  */
@@ -301,26 +319,29 @@ static void net_config(void)
 
 	while (!quit) {
 		net_status(s, sizeof(s));
-		printf("Network: %s\n\n", s);
-		printf("s - scan for networks\n");
-		if (wifi_scan_count())
-			printf("1-%d - choose a network from the scan\n",
-			       wifi_scan_count());
-		printf("e - SSID: %s\n", wifi_ssid);
-		printf("p - password: %s\n",
-		       wifi_password[0] ? "********" : "(none)");
-		printf("c - connect\n");
-		printf("d - disconnect\n");
-		printf("a - connect at boot: %s\n",
-		       wifi_autoconnect ? "yes" : "no");
-		printf("y - country: %s\n",
-		       wifi_country[0] ? wifi_country : "worldwide");
-		printf("n - NTP server: %s\n", ntp_server);
-		printf("u - UTC offset in hours: %d\n", utc_offset);
-		printf("m - modem init: %s\n", modem_init_str);
-		printf("q - quit\n");
+		printf(SGR_LABEL "Network:" SGR_OFF " %s\n\n", s);
+		menu_item("S", "Scan for networks", NULL);
+		if (wifi_scan_count()) {
+			char keys[8];
 
-		printf("\nCommand: ");
+			snprintf(keys, sizeof(keys), "1-%d", wifi_scan_count());
+			menu_item(keys, "Choose a network from the scan", NULL);
+		}
+		menu_item("E", "SSID:", "%s", wifi_ssid);
+		menu_item("P", "Password:", "%s",
+			  wifi_password[0] ? "********" : "(none)");
+		menu_item("C", "Connect", NULL);
+		menu_item("D", "Disconnect", NULL);
+		menu_item("A", "Connect at boot:", "%s",
+			  wifi_autoconnect ? "yes" : "no");
+		menu_item("Y", "Country:", "%s",
+			  wifi_country[0] ? wifi_country : "worldwide");
+		menu_item("N", "NTP server:", "%s", ntp_server);
+		menu_item("U", "UTC offset in hours:", "%d", utc_offset);
+		menu_item("M", "Modem init:", "%s", modem_init_str);
+		menu_item("X", "Exit to Main Menu", NULL);
+
+		printf("\n" SGR_KEY "Command:" SGR_OFF " ");
 		get_cmdline(s, 3);
 		putchar('\n');
 
@@ -424,7 +445,7 @@ static void net_config(void)
 			putchar('\n');
 			break;
 
-		case 'q':
+		case 'x':
 			quit = true;
 			break;
 		}
@@ -443,24 +464,6 @@ void net_autoconnect(void)
 	}
 }
 #endif
-
-#define SGR_KEY		"\033[96m"
-#define SGR_LABEL	"\033[93m"
-#define SGR_OFF		"\033[0m"
-
-static void menu_item(char key, const char *label, const char *fmt, ...)
-{
-	va_list ap;
-
-	printf(SGR_KEY "%c" SGR_OFF " - " SGR_LABEL "%s" SGR_OFF, key, label);
-	if (fmt != NULL) {
-		putchar(' ');
-		va_start(ap, fmt);
-		vprintf(fmt, ap);
-		va_end(ap);
-	}
-	putchar('\n');
-}
 
 /*
  * The status block takes the rows the terminal is denied, below the panel's
@@ -543,32 +546,32 @@ void config(void)
 			       t.year, t.month, t.day, t.hour, t.min, t.sec);
 #ifdef PICOCALC_WIFI
 			net_status(s_net, sizeof(s_net));
-			menu_item('n', "network:", "%s", s_net);
+			menu_item("N", "Network:", "%s", s_net);
 #endif
-			menu_item('v', "font:", "%s (%dx%d)",
+			menu_item("V", "Font:", "%s (%dx%d)",
 				  font_file[0] ? font_file : "built-in",
 				  term_get_width(), term_get_height());
-			menu_item('k', "arrow keys:", "%s",
+			menu_item("K", "Arrow keys:", "%s",
 				  (keymap_arrows == KEYMAP_ARROWS_WORDSTAR) ?
 				  "WordStar" : "ANSI");
-			menu_item('a', "set date", NULL);
-			menu_item('t', "set time", NULL);
-			menu_item('c', "switch CPU, currently", "%s",
+			menu_item("A", "Set date", NULL);
+			menu_item("T", "Set time", NULL);
+			menu_item("C", "Switch CPU, currently", "%s",
 				  (cpu == Z80) ? "Z80" : "8080");
 			if (speed == 0)
-				menu_item('s', "CPU speed:", "unlimited");
+				menu_item("S", "CPU speed:", "unlimited");
 			else
-				menu_item('s', "CPU speed:", "%d MHz", speed);
-			menu_item('p', "Port 255 value:", "%02XH", fp_value);
-			menu_item('f', "list files", NULL);
-			menu_item('r', "load file", NULL);
-			menu_item('d', "list disks", NULL);
-			menu_item('0', "Disk 0:", "%s", disks[0]);
-			menu_item('1', "Disk 1:", "%s", disks[1]);
-			menu_item('2', "Disk 2:", "%s", disks[2]);
-			menu_item('3', "Disk 3:", "%s", disks[3]);
-			menu_item('i', "Hard disk I:", "%s", disks[HD_SLOT]);
-			menu_item('g', "run machine", NULL);
+				menu_item("S", "CPU speed:", "%d MHz", speed);
+			menu_item("P", "Port 255 value:", "%02XH", fp_value);
+			menu_item("F", "List files", NULL);
+			menu_item("L", "Load file", NULL);
+			menu_item("D", "List disks", NULL);
+			menu_item("0", "Disk 0:", "%s", disks[0]);
+			menu_item("1", "Disk 1:", "%s", disks[1]);
+			menu_item("2", "Disk 2:", "%s", disks[2]);
+			menu_item("3", "Disk 3:", "%s", disks[3]);
+			menu_item("I", "Hard disk I:", "%s", disks[HD_SLOT]);
+			menu_item("R", "Run machine", NULL);
 			putchar('\n');
 		} else
 			menu = 1;
@@ -689,7 +692,7 @@ again:
 			menu = 0;
 			break;
 
-		case 'r':
+		case 'l':
 			prompt_fn(s);
 			if (s[0])
 				load_file(s);
@@ -718,7 +721,7 @@ again:
 			}
 			break;
 
-		case 'g':
+		case 'r':
 			go_flag = 1;
 			break;
 
