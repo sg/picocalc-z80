@@ -1,7 +1,7 @@
 #!/bin/sh
 # Pack the MicroSD card files: extract at the root of a FAT32 card to get /Z80.
 #
-#   ./make-sd-archive.sh [output]     default: $DEPLOY/sd_files-<version>.tar.gz
+#   ./make-sd-archive.sh [output]     default: $DEPLOY/picocalc-z80-sd-files-<version>.tar.gz
 #
 # Members come from git (tracked plus untracked-but-not-ignored files under
 # sd_files/), so a PCALC.DAT holding a WiFi password never gets in. A
@@ -11,7 +11,7 @@ set -e
 DEPLOY=${DEPLOY:-/home/steve/dev/picocalc/uf2-deploy}
 SRC=$(cd "$(dirname "$0")/sd_files" && pwd)
 VERSION=${VERSION:-$(git -C "$SRC" describe --tags --always --dirty=+ 2>/dev/null || echo unknown)}
-OUT=${1:-$DEPLOY/sd_files-$VERSION.tar.gz}
+OUT=${1:-$DEPLOY/picocalc-z80-sd-files-$VERSION.tar.gz}
 
 list=$(mktemp)
 trap 'rm -f "$list"' EXIT

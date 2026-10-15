@@ -45,7 +45,7 @@ jobs:
           cd src && ./build.sh all "$TAG"
 
       - name: Pack the MicroSD card files
-        run: VERSION="$TAG" src/make-sd-archive.sh "dist/sd_files-$TAG.tar.gz"
+        run: VERSION="$TAG" src/make-sd-archive.sh "dist/picocalc-z80-sd-files-$TAG.tar.gz"
 
       - name: Stage a draft release
         run: |
