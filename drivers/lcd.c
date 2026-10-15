@@ -357,12 +357,12 @@ int lcd_load_font(const char* filename) {
 	if (font.font_file) { free(font.font_file); font.font_file = NULL; }
 
 	if (!filename || filename[0] == '\0') {
-		font.glyphs = malloc(2049 * sizeof(u8));
-		memcpy(font.glyphs, (u8*)DEFAULT_GLYPHS, 2049);
-		font.glyph_count = 255;
+		font.glyphs = malloc(sizeof(default_glyphs));
+		memcpy(font.glyphs, default_glyphs, sizeof(default_glyphs));
+		font.glyph_count = DEFAULT_GLYPH_COUNT;
 		font.glyph_width = DEFAULT_GLYPH_WIDTH;
 		font.glyph_height = DEFAULT_GLYPH_HEIGHT;
-		font.firstcode = 0;
+		font.firstcode = DEFAULT_FIRSTCODE;
 	} else {
 		FRESULT res;
 		FIL fp;
@@ -397,8 +397,10 @@ int lcd_load_font(const char* filename) {
 }
 
 void lcd_draw_char_local(int x, int y, u16 fg, u16 bg, char c) {
-	if (c > font.glyph_count + font.firstcode) c = 0;
-	int offset = ((u8)(c - font.firstcode)) * font.bytewidth * font.glyph_height;
+	int index = (u8)c - font.firstcode;
+	// a font may hold only the printable range, so anything outside it draws the first glyph
+	if (index < 0 || index >= font.glyph_count) index = 0;
+	int offset = index * font.bytewidth * font.glyph_height;
 	for (int j = 0; j < font.glyph_height; j++) {
 		for (int i = 0; i < font.glyph_width; i++) {
 			int mask = (1 << (7 - i%8));
