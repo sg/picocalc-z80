@@ -55,7 +55,8 @@ static datetime_t t = { .year = 2024, .month = 1, .day = 1, .dotw = 1,
 static int brightness = 1000;
 static const char *cfg = Z80_DIR CONF_FILE;
 
-char font_file[DISKLEN+1];
+/* a missing file falls back to the built-in font in apply_font() */
+char font_file[DISKLEN+1] = Z80_DIR "5X9.FNT";
 
 /*
  * prompt for a filename
