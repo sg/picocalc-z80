@@ -348,6 +348,20 @@ void stdio_picocalc_out_chars(const char *buf, int length) {
 							else if (a == 27) ansi.c_inverse = false;
 							else if (a == 1)  ansi.c_bold = true;
 							else if (a == 22) ansi.c_bold = false;
+							else if (a == 38 || a == 48) { // 2;r;g;b, the 24 bit form
+								int p[4], n = 0;
+								while (n < 4) {
+									while (semicolon < ansi.stack_size && ansi.stack[semicolon] != ';') semicolon++;
+									if (semicolon >= ansi.stack_size) break;
+									p[n++] = atoi(ansi.stack + ++semicolon);
+								}
+								if (n == 4 && p[0] == 2) {
+									int r = p[1] & 0xff, g = p[2] & 0xff, bl = p[3] & 0xff;
+									u16 c = RGB(r, g, bl);
+									if (a == 38) ansi.fg = c;
+									else ansi.bg = c;
+								}
+							}
 							else if (a >= 30 && a <= 39) { // dim foreground
 								if (b == 9) ansi.fg = palette[DEFAULT_FG];
 								else if (b <= 7) ansi.fg = palette[b + ansi.c_bold * 8];
@@ -361,19 +375,6 @@ void stdio_picocalc_out_chars(const char *buf, int length) {
 							}
 							else if (a >= 100 && a <= 107) { // bright background
 								ansi.bg = palette[b + 8];
-							}
-							else if (a == 38 || a == 48) { // 2;r;g;b, the 24 bit form
-								int p[4], n = 0;
-								while (n < 4) {
-									while (semicolon < ansi.stack_size && ansi.stack[semicolon] != ';') semicolon++;
-									if (semicolon >= ansi.stack_size) break;
-									p[n++] = atoi(ansi.stack + ++semicolon);
-								}
-								if (n == 4 && p[0] == 2) {
-									u16 c = RGB(p[1] & 0xff, p[2] & 0xff, p[3] & 0xff);
-									if (a == 38) ansi.fg = c;
-									else ansi.bg = c;
-								}
 							}
 							while (semicolon < ansi.stack_size-1 && ansi.stack[semicolon] != ';') semicolon++;
 							semicolon++;
