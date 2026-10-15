@@ -200,7 +200,9 @@ static void z80_main(void)
 	       SYS_CLK_MHZ);
 	printf("%s\n", USR_CPR);
 	printf("<steve@stevegibson.com>\n\n");
-	printf("Based on:\nZ80pack release %s, %s\n\n", RELEASE, COPYR);
+	printf("Based on:\n  Z80pack release %s\n", RELEASE);
+	printf("  and the Pico-Eval-Board-80 project,\n");
+	printf("  %s\n\n", COPYR);
 
 #ifdef WANT_ICE
 	/* if ICE compiled in print some hints */
