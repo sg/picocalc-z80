@@ -58,6 +58,10 @@ static void sio2b_data_out(BYTE data), sio2_ignore_out(BYTE data);
 static BYTE sio2a_data_in(void), sio2a_stat_in(void);
 static void sio2a_data_out(BYTE data), sio2a_ctl_out(BYTE data);
 #endif
+#if !PICOCALC_CONSOLE_UART || !defined(PICOCALC_WIFI)
+static BYTE sio_absent_stat_in(void), sio_absent_data_in(void);
+static void sio_absent_out(BYTE data);
+#endif
 
 static BYTE sio_last;	/* last character received */
 static int sio_ahead = -1; /* one character of lookahead, -1 when empty */
@@ -76,11 +80,17 @@ BYTE (*const port_in[256])(void) = {
 #if PICOCALC_CONSOLE_UART
 	[ 34] = sio2a_data_in,	/* IMSAI SIO-2 port A data, raw USB-C UART */
 	[ 35] = sio2a_stat_in,	/* IMSAI SIO-2 port A status */
+#else
+	[ 34] = sio_absent_data_in,
+	[ 35] = sio_absent_stat_in,
 #endif
 #ifdef PICOCALC_WIFI
 	[ 36] = sio2b_data_in,	/* IMSAI SIO-2 port B data, the modem */
 	[ 37] = sio2b_stat_in,	/* IMSAI SIO-2 port B status */
 	[ 40] = sio2_ctl_in,	/* IMSAI SIO-2 control, carrier detect */
+#else
+	[ 36] = sio_absent_data_in,
+	[ 37] = sio_absent_stat_in,
 #endif
 	[ 64] = mmu_in,		/* MMU */
 	[ 65] = clkc_in,	/* RTC read clock command */
@@ -104,11 +114,17 @@ void (*const port_out[256])(BYTE data) = {
 #if PICOCALC_CONSOLE_UART
 	[ 34] = sio2a_data_out,	/* IMSAI SIO-2 port A data */
 	[ 35] = sio2a_ctl_out,	/* IMSAI SIO-2 port A control */
+#else
+	[ 34] = sio_absent_out,
+	[ 35] = sio_absent_out,
 #endif
 #ifdef PICOCALC_WIFI
 	[ 36] = sio2b_data_out,	/* IMSAI SIO-2 port B data */
 	[ 37] = sio2_ignore_out, /* IMSAI SIO-2 port B control */
 	[ 40] = sio2_ignore_out, /* IMSAI SIO-2 control */
+#else
+	[ 36] = sio_absent_out,
+	[ 37] = sio_absent_out,
 #endif
 	[ 64] = mmu_out,	/* MMU */
 	[ 65] = clkc_out,	/* RTC write clock command */
@@ -247,6 +263,28 @@ static BYTE sio2_ctl_in(void)
 
 /* 8251 mode and command bytes, and the control latch, set nothing here */
 static void sio2_ignore_out(BYTE data)
+{
+	UNUSED(data);
+}
+#endif
+
+#if !PICOCALC_CONSOLE_UART || !defined(PICOCALC_WIFI)
+/*
+ *	A SIO-2 port this build lacks looks like a line with nothing on the
+ *	other end; an unhandled port would read 0xff, which the BIOS takes
+ *	for a receiver that always has a character waiting.
+ */
+static BYTE sio_absent_stat_in(void)
+{
+	return 0x01;
+}
+
+static BYTE sio_absent_data_in(void)
+{
+	return 0;
+}
+
+static void sio_absent_out(BYTE data)
 {
 	UNUSED(data);
 }

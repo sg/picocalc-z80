@@ -7,6 +7,19 @@
 ;	new hardware is needed - drive 8 simply has a different geometry,
 ;	256 tracks of 128 sectors, and its own disk parameter block.
 ;
+;	PicoCalc: the character devices follow the IOBYTE, with the same
+;	assignments as z80pack's IMSAI BIOS so the Kermit, QTerm and XMODEM
+;	setups from its comms disk work unchanged:
+;
+;	CON:	TTY: CRT: = console		BAT: = RDR: in, LST: out
+;		UC1: = modem
+;	RDR:	TTY: UR2: = console		PTR: = USB-C serial
+;		UR1: = modem
+;	PUN:	TTY: UP2: = console		PTP: = USB-C serial
+;		UP1: = modem
+;	LST:	TTY: CRT: = console		LPT: = none
+;		UL1: = USB-C serial
+;
 MSIZE	EQU	64		;CP/M memory size in kilobytes
 ;
 ;	"bias" is address offset from 3400H for memory systems
@@ -19,6 +32,7 @@ BIOS	EQU	CCP+1600H	;base of bios
 NSECTS	EQU	(BIOS-CCP)/128	;warm start sector count
 CDISK	EQU	0004H		;current disk number 0=A,...,15=P
 IOBYTE	EQU	0003H		;Intel I/O byte
+INITIO	EQU	10010100B	;CON:=TTY:, RDR:=PTR:, PUN:=PTP:, LST:=LPT:
 FDCCMD	EQU	0040H		;FDC command bytes
 DDTRK	EQU	0		;offset for track
 DDSEC	EQU	1		;offset for sector
@@ -30,6 +44,10 @@ DDHDMA	EQU	3		;offset for DMA address high
 CONSTA	EQU	0		;console status port
 CONDAT	EQU	1		;console data port
 FDC	EQU	4		;port for the FDC
+TTY2	EQU	22H		;SIO-2 port A data, the USB-C serial line
+TTY2S	EQU	23H		;SIO-2 port A status
+MODEM	EQU	24H		;SIO-2 port B data, the WiFi modem
+MODEMS	EQU	25H		;SIO-2 port B status
 ;
 	ORG	BIOS		;origin of BIOS
 ;
@@ -140,7 +158,8 @@ BOOT	LXI	SP,80H		;use space below buffer for stack
 	XRA	A		;zero in the accumulator
 	STA	CDISK		;select disk drive 0
 	STA	DSKNO
-	STA	IOBYTE		;setup IOBYTE
+	MVI	A,INITIO	;setup IOBYTE
+	STA	IOBYTE
 	MVI	A,10H		;setup FDC command
 	OUT	FDC
 	MVI	A,FDCCMD AND 0FFH
@@ -205,50 +224,165 @@ GOCPM	MVI	A,0C3H		;C3 is a JMP instruction
 	JC	CCP+3		;go to CCP warm start
 	JMP	CCP		;go to CCP cold start
 ;
+;	jump to one of the four addresses after the call, picked by the
+;	two IOBYTE bits that the shift count byte in front of them selects
+;
+DISPATCH XTHL			;save callers HL, get table address
+	MOV	D,M		;get shift count into D
+	INX	H		;point to table
+	LDA	IOBYTE
+DSHIFT	RLC			;shift the field into bits 2-1
+	DCR	D
+	JNZ	DSHIFT
+	ANI	06H
+	MOV	E,A		;D is already clear
+	DAD	D
+	MOV	A,M		;get table word into HL
+	INX	H
+	MOV	H,M
+	MOV	L,A
+	XTHL			;put routine address, get callers HL
+	RET			;go to routine
+;
 ;	console status, return 0FFH if character ready, 00H if not
 ;
-CONST	IN	CONSTA		;get console status
-	RRC			;test bit 0
-	JC	CONST1		;not ready
-	MVI	A,0FFH		;ready, set flag
-	RET
-CONST1	XRA	A		;zero A
-	RET
+CONST	CALL	DISPATCH
+	DB	1		;bits 1-0
+	DW	TTYIS		;TTY:
+	DW	TTYIS		;CRT:
+	DW	TTY2IS		;BAT:
+	DW	MODIS		;UC1:
 ;
 ;	console input character into register A
 ;
-CONIN	IN	CONSTA		;get console status
-	RRC			;test bit 0
-	JC	CONIN		;not ready
-	IN	CONDAT		;get character from console
-	RET
+CONIN	CALL	DISPATCH
+	DB	1		;bits 1-0
+	DW	TTYIN		;TTY:
+	DW	TTYIN		;CRT:
+	DW	TTY2IN		;BAT:
+	DW	MODIN		;UC1:
 ;
-;	console output
+;	console output character from register C
 ;
-CONOUT	IN	CONSTA		;get status
-	RLC			;test bit 7
-	JC	CONOUT		;wait until transmitter ready
-	MOV	A,C		;get character into accumulator
-	OUT	CONDAT		;send to console
-	RET
+CONOUT	CALL	DISPATCH
+	DB	1		;bits 1-0
+	DW	TTYOUT		;TTY:
+	DW	TTYOUT		;CRT:
+	DW	LPTOUT		;BAT:
+	DW	MODOUT		;UC1:
 ;
-;	printer status, return 0FFH if character ready, 00H if not
+;	printer status, return 0FFH if ready, 00H if not
 ;
-LISTST	XRA	A		;we have no printer
-	RET			;so never ready
+LISTST	CALL	DISPATCH
+	DB	3		;bits 7-6
+	DW	TTYOS		;TTY:
+	DW	TTYOS		;CRT:
+	DW	NOTRDY		;LPT:
+	DW	TTY2OS		;UL1:
 ;
-;	line printer output
+;	list character from register C
 ;
-LIST	RET			;we have no printer
+LIST	CALL	DISPATCH
+	DB	3		;bits 7-6
+	DW	TTYOUT		;TTY:
+	DW	TTYOUT		;CRT:
+	DW	LPTOUT		;LPT:
+	DW	TTY2OUT		;UL1:
 ;
 ;	punch character from register C
 ;
-PUNCH	RET			;we have no puncher
+PUNCH	CALL	DISPATCH
+	DB	5		;bits 5-4
+	DW	TTYOUT		;TTY:
+	DW	TTY2OUT		;PTP:
+	DW	MODOUT		;UP1:
+	DW	TTYOUT		;UP2:
 ;
 ;	read character into register A from reader
 ;
-READER	MVI	A,01AH		;we have no reader
-	RET			;so return CTL-Z
+READER	CALL	DISPATCH
+	DB	7		;bits 3-2
+	DW	TTYIN		;TTY:
+	DW	TTY2IN		;PTR:
+	DW	MODIN		;UR1:
+	DW	TTYIN		;UR2:
+;
+;	console, the screen and keyboard (status bits are active low)
+;
+TTYIS	IN	CONSTA
+	RRC			;test bit 0
+	JC	NOTRDY
+DEVRDY	MVI	A,0FFH
+	RET
+NOTRDY	XRA	A
+	RET
+;
+TTYOS	IN	CONSTA
+	RLC			;test bit 7
+	JC	NOTRDY
+	JMP	DEVRDY
+;
+TTYIN	IN	CONSTA
+	RRC			;test bit 0
+	JC	TTYIN		;not ready
+	IN	CONDAT
+	RET
+;
+TTYOUT	IN	CONSTA
+	RLC			;test bit 7
+	JC	TTYOUT		;wait until transmitter ready
+	MOV	A,C
+	OUT	CONDAT
+	RET
+;
+;	there is no printer, so output to it is thrown away
+;
+LPTOUT	RET
+;
+;	SIO-2 port A, the USB-C serial line (8251 status bits)
+;
+TTY2IS	IN	TTY2S
+	ANI	02H		;receiver ready?
+	RZ
+	JMP	DEVRDY
+;
+TTY2OS	IN	TTY2S
+	ANI	01H		;transmitter ready?
+	RZ
+	JMP	DEVRDY
+;
+TTY2IN	IN	TTY2S
+	ANI	02H
+	JZ	TTY2IN		;wait until character available
+	IN	TTY2
+	RET
+;
+TTY2OUT	IN	TTY2S
+	RRC
+	JNC	TTY2OUT		;wait until transmitter ready
+	MOV	A,C
+	OUT	TTY2
+	RET
+;
+;	SIO-2 port B, the WiFi modem (8251 status bits)
+;
+MODIS	IN	MODEMS
+	ANI	02H		;receiver ready?
+	RZ
+	JMP	DEVRDY
+;
+MODIN	IN	MODEMS
+	ANI	02H
+	JZ	MODIN		;wait until character available
+	IN	MODEM
+	RET
+;
+MODOUT	IN	MODEMS
+	RRC
+	JNC	MODOUT		;wait until transmitter ready
+	MOV	A,C
+	OUT	MODEM
+	RET
 ;
 ;	move to track 0 position on current disk
 ;

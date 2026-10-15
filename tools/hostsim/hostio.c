@@ -19,6 +19,7 @@ static BYTE p000_in(void), p001_in(void), p255_in(void), hwctl_in(void);
 static BYTE mmu_in(void);
 static BYTE sio2b_data_in(void), sio2b_stat_in(void), sio2_ctl_in(void);
 static void sio2b_data_out(BYTE data), sio2_ignore_out(BYTE data);
+static BYTE sio2a_stat_in(void), sio2a_data_in(void);
 
 BYTE fp_value;
 static BYTE hwctl_lock = 0xff;
@@ -26,6 +27,7 @@ static int ahead = -1;
 
 BYTE (*const port_in[256])(void) = {
 	[  0] = p000_in, [  1] = p001_in, [  4] = fdc_in,
+	[ 34] = sio2a_data_in, [ 35] = sio2a_stat_in,
 	[ 36] = sio2b_data_in, [ 37] = sio2b_stat_in, [ 40] = sio2_ctl_in,
 	[ 64] = mmu_in,  [ 65] = clkc_in, [ 66] = clkd_in,
 	[160] = hwctl_in, [255] = p255_in
@@ -33,6 +35,7 @@ BYTE (*const port_in[256])(void) = {
 
 void (*const port_out[256])(BYTE data) = {
 	[  1] = p001_out, [  4] = fdc_out,
+	[ 34] = sio2_ignore_out, [ 35] = sio2_ignore_out,
 	[ 36] = sio2b_data_out, [ 37] = sio2_ignore_out, [ 40] = sio2_ignore_out,
 	[ 64] = mmu_out,  [ 65] = clkc_out, [ 66] = clkd_out,
 	[160] = hwctl_out, [255] = p255_out
@@ -50,6 +53,10 @@ static BYTE sio2b_data_in(void) { return modem_getc(); }
 static void sio2b_data_out(BYTE data) { modem_putc(data); }
 static BYTE sio2_ctl_in(void) { return 0b10111011 | (modem_carrier() ? 0x40 : 0); }
 static void sio2_ignore_out(BYTE data) { UNUSED(data); }
+
+/* port A is the USB-C line on the Pico; here nothing is plugged in */
+static BYTE sio2a_stat_in(void) { return 0x01; }
+static BYTE sio2a_data_in(void) { return 0; }
 
 static bool rx_ready(void)
 {

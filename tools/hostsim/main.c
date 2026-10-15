@@ -96,8 +96,10 @@ int main(int argc, char **argv)
 	init_io();
 	modem_init();
 
-	f_value = 0;		/* run flat out */
-	tmax = 100000;
+	/* flat out unless HOSTSIM_MHZ asks for the Pico's paced speed,
+	   which software timing loops such as QTerm's delays depend on */
+	f_value = getenv("HOSTSIM_MHZ") ? atoi(getenv("HOSTSIM_MHZ")) : 0;
+	tmax = f_value ? f_value * 10000 : 100000;
 
 	run_cpu();
 
