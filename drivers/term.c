@@ -95,7 +95,7 @@ static int ansi_len_to_lcd_y(int len) {
 	return (ansi.y + (len + ansi.x) / font.term_width) * font.glyph_height;
 }
 
-static void (*scroll_callback)(void) = NULL;
+static bool bottom_reserved;
 static void (*observer)(int what, int x, int y, char c) = NULL;
 
 void term_set_observer(void (*callback)(int what, int x, int y, char c)) {
@@ -106,8 +106,8 @@ static inline void observe(int what, int x, int y, char c) {
 	if (observer) observer(what, x, y, c);
 }
 
-void term_set_scroll_callback(void (*callback)(void)) {
-	scroll_callback = callback;
+void term_reserve_bottom(bool reserved) {
+	bottom_reserved = reserved;
 }
 
 int term_get_scroll() {
@@ -117,9 +117,10 @@ int term_get_scroll() {
 void term_scroll(int lines) {
 	if (lines != ansi.scroll) {
 		ansi.scroll = lines;
-		term_erase_line(lines + font.term_height);
+		// that row is still on screen under someone else's content until the scroll lands
+		if (bottom_reserved) observe(TERM_OBS_ERASE_ROW, 0, lines + font.term_height, 0);
+		else term_erase_line(lines + font.term_height);
 		lcd_scroll(lines * font.glyph_height);
-		if (scroll_callback) scroll_callback();
 	}
 }
 

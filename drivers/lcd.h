@@ -36,6 +36,9 @@ void lcd_buffer_blit_local();
 void lcd_draw_char_local(int x, int y, u16 fg, u16 bg, char c);
 void lcd_draw_text_local(int x, int y, u16 fg, u16 bg, const char* text, size_t len, u8 align);
 void lcd_scroll_local(int lines);
+/* core 0 only: hook runs either side of the scroll register write, done false then true */
+void lcd_set_scroll_hook(void (*hook)(int from, int to, bool done));
+int lcd_get_scroll(void);
 void lcd_clear_local();
 
 int lcd_load_font(const char* filename);

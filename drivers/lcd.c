@@ -316,10 +316,26 @@ bool lcd_buffer_enable_local(int mode) {
 	return false;
 }
 
+static void (*scroll_hook)(int from, int to, bool done);
+static int scroll_pos;
+
+void lcd_set_scroll_hook(void (*hook)(int from, int to, bool done)) {
+	scroll_hook = hook;
+}
+
+int lcd_get_scroll(void) {
+	return scroll_pos;
+}
+
 void lcd_scroll_local(int lines) {
+	int from = scroll_pos;
+
 	lines %= MEM_HEIGHT;
+	if (scroll_hook) scroll_hook(from, lines, false);
 	uint8_t cmd[] = {0x37, (lines >> 8), (lines & 0xFF)};
 	lcd_write_cmd(cmd, 3);
+	scroll_pos = lines;
+	if (scroll_hook) scroll_hook(from, lines, true);
 }
 
 void lcd_setup_scrolling(int top_fixed_lines, int bottom_fixed_lines) {

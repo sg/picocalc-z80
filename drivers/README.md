@@ -44,10 +44,12 @@ Kept deliberately small so upstream fixes stay easy to merge.
   a lone `\r` is how software overwrites a line in place, and full screen
   editors do it constantly.
 
-- Added `term_get_scroll()` and `term_set_scroll_callback()`. A scroll erases
-  the row below the last text row, which is where `srcsim/status.c` keeps the
-  status line, so it needs to know when to repaint and where the row currently
-  lives in the panel's 480 line memory.
+- Added `term_get_scroll()` and `term_reserve_bottom()`. A scroll erases the
+  row below the last text row, which is where `srcsim/status.c` keeps the
+  status block; once reserved, that row is left to its owner.
+- Added `lcd_set_scroll_hook()` and `lcd_get_scroll()`. The hook runs on core 0
+  either side of the scroll register write, so the status block can be redrawn
+  in step with the scroll rather than racing it from the other core.
 
 - Added `term_set_observer()`, reported from the four places that change what
   is on screen: a character drawn, the screen cleared, a row cleared, and a row
