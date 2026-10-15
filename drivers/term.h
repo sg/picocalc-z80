@@ -33,7 +33,6 @@ void term_scroll(int lines);
 void term_erase_line(int y);
 int term_get_width();
 int term_get_scroll();
-void term_reserve_bottom(bool reserved);
 void term_set_observer(void (*callback)(int what, int x, int y, char c));
 int term_get_height();
 int term_get_x();

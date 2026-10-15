@@ -44,6 +44,7 @@ uint lcd_offset;
 uint8_t* framebuffer;
 int framebuffer_mode;
 int lcd_current_height;
+int lcd_scroll_height = MEM_HEIGHT;
 
 #define LCD_TMPBUF_SIZE LCD_WIDTH*2
 uint16_t lcd_tmpbuf[LCD_TMPBUF_SIZE];
@@ -316,30 +317,25 @@ bool lcd_buffer_enable_local(int mode) {
 	return false;
 }
 
-static void (*scroll_hook)(int from, int to, bool done);
-static int scroll_pos;
-
-void lcd_set_scroll_hook(void (*hook)(int from, int to, bool done)) {
-	scroll_hook = hook;
-}
-
-int lcd_get_scroll(void) {
-	return scroll_pos;
-}
-
 void lcd_scroll_local(int lines) {
-	int from = scroll_pos;
-
-	lines %= MEM_HEIGHT;
-	if (scroll_hook) scroll_hook(from, lines, false);
+	lines %= lcd_scroll_height;
 	uint8_t cmd[] = {0x37, (lines >> 8), (lines & 0xFF)};
 	lcd_write_cmd(cmd, 3);
-	scroll_pos = lines;
-	if (scroll_hook) scroll_hook(from, lines, true);
+}
+
+/*
+ * The controller scans all 480 lines of its memory and the panel shows the
+ * first 320, so a bottom fixed area that starts inside those 320 stays put on
+ * screen while the lines above it scroll.
+ */
+void lcd_scroll_area_local(int height) {
+	lcd_scroll_height = (height > 0 && height < MEM_HEIGHT) ? height : MEM_HEIGHT;
+	lcd_setup_scrolling(0, MEM_HEIGHT - lcd_scroll_height);
+	lcd_scroll_local(0);
 }
 
 void lcd_setup_scrolling(int top_fixed_lines, int bottom_fixed_lines) {
-	int vertical_scrolling_area = LCD_HEIGHT - (top_fixed_lines + bottom_fixed_lines);
+	int vertical_scrolling_area = MEM_HEIGHT - (top_fixed_lines + bottom_fixed_lines);
 	const uint8_t cmd[] = {0x33,
 		(top_fixed_lines >> 8), (top_fixed_lines & 0xFF),
 		(vertical_scrolling_area >> 8), (vertical_scrolling_area & 0xFF),
@@ -591,6 +587,11 @@ int lcd_fifo_receiver(uint32_t message) {
 		case FIFO_LCD_SCROLL:
 			height = multicore_fifo_pop_blocking_inline();
 			lcd_scroll_local((int)height);
+			return 1;
+
+		case FIFO_LCD_SCROLLAREA:
+			height = multicore_fifo_pop_blocking_inline();
+			lcd_scroll_area_local((int)height);
 			return 1;
 
 		default:

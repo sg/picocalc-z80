@@ -96,7 +96,7 @@ static void repaint(void)
 
 	for (k = 0; k < rows; k++) {
 		row = scroll + k - offset;
-		y = ((scroll + k) * font.glyph_height) % lcd_current_height;
+		y = ((scroll + k) * font.glyph_height) % lcd_scroll_height;
 
 		const char *src = (row >= sb_oldest) ? sb_row(row) : blank;
 		int used = cols * font.glyph_width;
@@ -109,8 +109,8 @@ static void repaint(void)
 				 font.glyph_height);
 
 		/* a font whose height does not divide the ring straddles it */
-		if (y > lcd_current_height - font.glyph_height) {
-			y -= lcd_current_height;
+		if (y > lcd_scroll_height - font.glyph_height) {
+			y -= lcd_scroll_height;
 			lcd_draw_text(0, y, fg, bg, src, cols, LCD_ALIGN_LEFT);
 			if (used < LCD_WIDTH)
 				lcd_fill(bg, used, y, LCD_WIDTH - used,

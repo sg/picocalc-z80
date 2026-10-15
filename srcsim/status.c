@@ -47,45 +47,12 @@ static int battery = -1;
 static bool charging;
 static absolute_time_t battery_due;
 
-/* everything below is touched on core 0 only, from interrupts of one priority */
+/* touched only by the repaint timer, and by status_paint() with it masked */
 static char shown[2][LINE_MAX + 1];
 static int shown_width;
-static int painted_y = -1;
 static volatile bool repaint_due;
 
 enum { SEPARATOR, MACHINE, DRIVES, STRIP, PIECES };
-
-static void fill_at(int y, int h, u16 color)
-{
-	y %= lcd_current_height;
-	lcd_fill(color, 0, y, LCD_WIDTH, h);
-	if (y + h > lcd_current_height)
-		lcd_fill(color, 0, y - lcd_current_height, LCD_WIDTH, h);
-}
-
-/* opaque text over the old line, so a repaint never shows a blank row */
-static void text_at(int y, const char *text, int len, u16 fg)
-{
-	int used = len * font.glyph_width;
-	int h = font.glyph_height;
-
-	y %= lcd_current_height;
-	lcd_draw_text(0, y, fg, STATUS_BG, text, len, LCD_ALIGN_LEFT);
-	if (used < LCD_WIDTH)
-		lcd_fill(STATUS_BG, used, y, LCD_WIDTH - used, h);
-	if (y + h > lcd_current_height) {
-		y -= lcd_current_height;
-		lcd_draw_text(0, y, fg, STATUS_BG, text, len, LCD_ALIGN_LEFT);
-		if (used < LCD_WIDTH)
-			lcd_fill(STATUS_BG, used, y, LCD_WIDTH - used, h);
-	}
-}
-
-static int block_y(int scroll)
-{
-	return (scroll + term_get_height() * font.glyph_height) %
-	       lcd_current_height;
-}
 
 /* a font whose height does not divide 320 leaves a sliver under the block */
 static int piece_height(int piece)
@@ -98,30 +65,28 @@ static int piece_height(int piece)
 	return (h > 0) ? h : 0;
 }
 
-static void paint_piece(int top, int piece)
+/* opaque text over the old line, so a repaint never shows a blank row */
+static void paint_piece(int piece)
 {
-	int y = top + piece * font.glyph_height;
+	int y = (term_get_height() + piece) * font.glyph_height;
+	int used = shown_width * font.glyph_width;
+	const char *text = shown[piece == DRIVES];
 
 	switch (piece) {
 	case MACHINE:
-		text_at(y, shown[0], shown_width, STATUS_FG);
-		break;
 	case DRIVES:
-		text_at(y, shown[1], shown_width, STATUS_DIM);
+		lcd_draw_text(0, y, (piece == MACHINE) ? STATUS_FG : STATUS_DIM,
+			      STATUS_BG, text, shown_width, LCD_ALIGN_LEFT);
+		if (used < LCD_WIDTH)
+			lcd_fill(STATUS_BG, used, y, LCD_WIDTH - used,
+				 font.glyph_height);
 		break;
 	default:
 		if (piece_height(piece))
-			fill_at(y, piece_height(piece), term_get_bg());
+			lcd_fill(term_get_bg(), 0, y, LCD_WIDTH,
+				 piece_height(piece));
 		break;
 	}
-}
-
-static bool offscreen(int scroll, int y, int h)
-{
-	int d = ((y - scroll) % lcd_current_height + lcd_current_height) %
-		lcd_current_height;
-
-	return (d >= LCD_HEIGHT) && (d + h <= lcd_current_height);
 }
 
 static const char *disk_name(int drive)
@@ -291,18 +256,10 @@ static bool hidden(void)
 	return !status_enabled || dazzler_state;
 }
 
-static void compose(void)
-{
-	shown_width = line_width();
-	compose_machine(shown[0], shown_width);
-	compose_drives(shown[1], shown_width);
-}
-
 static void refresh(bool force)
 {
 	char machine[LINE_MAX + 1], drives[LINE_MAX + 1];
 	int width = line_width();
-	int top = block_y(lcd_get_scroll());
 	int i;
 
 	if (hidden())
@@ -310,64 +267,22 @@ static void refresh(bool force)
 
 	compose_machine(machine, width);
 	compose_drives(drives, width);
-	if (force || (top != painted_y) || (width != shown_width)) {
+	if (force || (width != shown_width)) {
 		memcpy(shown[0], machine, width);
 		memcpy(shown[1], drives, width);
 		shown_width = width;
 		for (i = 0; i < PIECES; i++)
-			paint_piece(top, i);
-		painted_y = top;
+			paint_piece(i);
 		return;
 	}
 	if (memcmp(shown[0], machine, width)) {
 		memcpy(shown[0], machine, width);
-		paint_piece(top, MACHINE);
+		paint_piece(MACHINE);
 	}
 	if (memcmp(shown[1], drives, width)) {
 		memcpy(shown[1], drives, width);
-		paint_piece(top, DRIVES);
+		paint_piece(DRIVES);
 	}
-}
-
-/*
- * The block moves through display memory with every scroll. What will be
- * offscreen until the scroll lands is drawn before it, and the rest straight
- * after, so the block is wrong on screen for two rows' worth of drawing.
- */
-static void on_scroll(int from, int to, bool done)
-{
-	static const int order[] = { MACHINE, SEPARATOR, DRIVES, STRIP };
-	static bool early[PIECES];
-	int top = block_y(to);
-	int text_h, d, i;
-
-	if (hidden())
-		return;
-	if (shown_width != line_width())
-		compose();
-
-	if (!done) {
-		for (i = 0; i < PIECES; i++) {
-			early[i] = offscreen(from, top + i * font.glyph_height,
-					     piece_height(i));
-			if (early[i])
-				paint_piece(top, i);
-		}
-		return;
-	}
-
-	/* the old block, and any stale ring rows past it, are text area now */
-	if (painted_y >= 0) {
-		text_h = term_get_height() * font.glyph_height;
-		d = ((painted_y - to) % lcd_current_height +
-		     lcd_current_height) % lcd_current_height;
-		if (d < text_h)
-			fill_at(painted_y, text_h - d, term_get_bg());
-	}
-	for (i = 0; i < PIECES; i++)
-		if (!early[order[i]])
-			paint_piece(top, order[i]);
-	painted_y = top;
 }
 
 static bool on_repaint(repeating_timer_t *rt)
@@ -410,7 +325,5 @@ void status_init(void)
 		return;
 
 	battery_due = get_absolute_time();
-	term_reserve_bottom(true);
-	lcd_set_scroll_hook(on_scroll);
 	add_repeating_timer_ms(REPAINT_MS, on_repaint, NULL, &repaint_timer);
 }

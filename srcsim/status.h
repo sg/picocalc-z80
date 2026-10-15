@@ -4,11 +4,9 @@
  * Status block along the bottom of the PicoCalc screen: a blank separator
  * row, then a line about the machine, then a line about the drives.
  *
- * The row is taken from the terminal rather than from the panel's hardware
- * scroll regions: drivers/term.c writes into a 480 line ring and picks the
- * visible 320 line window with the scroll register, so a hardware fixed area
- * would mean reworking that arithmetic. Instead the terminal is told it has
- * one row fewer, and this repaints the row it no longer uses.
+ * The rows are taken off the bottom of the terminal, and the panel's scroll
+ * area is set to end where they begin, so the controller keeps them fixed on
+ * screen and a scroll never has to redraw them.
  */
 
 #ifndef STATUS_INC

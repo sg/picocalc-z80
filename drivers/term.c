@@ -92,10 +92,9 @@ static int ansi_len_to_lcd_x(int len) {
 }
 
 static int ansi_len_to_lcd_y(int len) {
-	return (ansi.y + (len + ansi.x) / font.term_width) * font.glyph_height;
+	return (ansi.y + (len + ansi.x) / font.term_width) * font.glyph_height % lcd_scroll_height;
 }
 
-static bool bottom_reserved;
 static void (*observer)(int what, int x, int y, char c) = NULL;
 
 void term_set_observer(void (*callback)(int what, int x, int y, char c)) {
@@ -106,20 +105,18 @@ static inline void observe(int what, int x, int y, char c) {
 	if (observer) observer(what, x, y, c);
 }
 
-void term_reserve_bottom(bool reserved) {
-	bottom_reserved = reserved;
-}
-
 int term_get_scroll() {
 	return ansi.scroll;
 }
 
 void term_scroll(int lines) {
 	if (lines != ansi.scroll) {
+		// the rows coming into view may be the very ones leaving the top, so clear them first
+		int from = ansi.scroll + font.term_height;
+		if (from < lines) from = lines;
 		ansi.scroll = lines;
-		// that row is still on screen under someone else's content until the scroll lands
-		if (bottom_reserved) observe(TERM_OBS_ERASE_ROW, 0, lines + font.term_height, 0);
-		else term_erase_line(lines + font.term_height);
+		for (int y = from; y < lines + font.term_height; y++)
+			term_erase_line(y);
 		lcd_scroll(lines * font.glyph_height);
 	}
 }
@@ -127,40 +124,41 @@ void term_scroll(int lines) {
 void term_clear() {
 	observe(TERM_OBS_CLEAR, 0, 0, 0);
 	ansi.x = ansi.y = ansi.len = 0;
-	lcd_clear();
+	// whatever sits below the scroll area is not the terminal's to clear
+	lcd_fill(0, 0, 0, LCD_WIDTH, lcd_scroll_height);
 	lcd_scroll(0);
 	ansi.scroll = 0;
 }
 
 static void term_draw_char(int x, int y, u16 fg, u16 bg, char c) {
-	y %= lcd_current_height;
+	y %= lcd_scroll_height;
 	lcd_draw_char(x, y, fg, bg, c);
-	if (y > lcd_current_height - font.glyph_height)
-		lcd_draw_char(x, y - lcd_current_height, fg, bg, c);
+	if (y > lcd_scroll_height - font.glyph_height)
+		lcd_draw_char(x, y - lcd_scroll_height, fg, bg, c);
 }
 
 static void term_erase_char(int x, int y, u16 bg) {
-	y %= lcd_current_height;
+	y %= lcd_scroll_height;
 	lcd_fill(bg, x, y, font.glyph_width, font.glyph_height);
-	if (y > lcd_current_height - font.glyph_height)
-		lcd_fill(bg, x, y - lcd_current_height, font.glyph_width, font.glyph_height);
+	if (y > lcd_scroll_height - font.glyph_height)
+		lcd_fill(bg, x, y - lcd_scroll_height, font.glyph_width, font.glyph_height);
 }
 
 void term_erase_line(int y) {
 	observe(TERM_OBS_ERASE_ROW, 0, y, 0);
-	y = (y * font.glyph_height) % lcd_current_height;
+	y = (y * font.glyph_height) % lcd_scroll_height;
 	lcd_fill(ansi.bg, 0, y, LCD_WIDTH, font.glyph_height);
-	if (y > lcd_current_height - font.glyph_height)
-		lcd_fill(ansi.bg, 0, y - lcd_current_height, LCD_WIDTH, font.glyph_height);
+	if (y > lcd_scroll_height - font.glyph_height)
+		lcd_fill(ansi.bg, 0, y - lcd_scroll_height, LCD_WIDTH, font.glyph_height);
 }
 
 void term_erase_from_cursor() {
 	observe(TERM_OBS_ERASE_EOL, ansi.x, ansi.y, 0);
 	int x = ansi.x * font.glyph_width;
-	int y = (ansi.y * font.glyph_height) % lcd_current_height;
+	int y = (ansi.y * font.glyph_height) % lcd_scroll_height;
 	lcd_fill(ansi.bg, x, y, LCD_WIDTH - x, font.glyph_height);
-	if (y > lcd_current_height - font.glyph_height)
-		lcd_fill(ansi.bg, x, y - lcd_current_height, LCD_WIDTH - x, font.glyph_height);
+	if (y > lcd_scroll_height - font.glyph_height)
+		lcd_fill(ansi.bg, x, y - lcd_scroll_height, LCD_WIDTH - x, font.glyph_height);
 }
 
 static void draw_cursor() {
@@ -297,7 +295,7 @@ static void out_char(char c) {
 		if (c >= 32 && c < 127) {
 			should_scroll();
 			// the glyph covers the cursor bar, so a later blink-off must not erase over it
-			if (ansi.cursor_visible && ansi.cx == ansi.x * font.glyph_width && ansi.cy == ansi.y * font.glyph_height)
+			if (ansi.cursor_visible && ansi.cx == ansi.x * font.glyph_width && ansi.cy == ansi.y * font.glyph_height % lcd_scroll_height)
 				ansi.cursor_visible = false;
 			term_draw_char(ansi.x * font.glyph_width, ansi.y * font.glyph_height, fg, bg, c);
 			observe(TERM_OBS_CHAR, ansi.x, ansi.y, c);

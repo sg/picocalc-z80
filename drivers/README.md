@@ -44,12 +44,14 @@ Kept deliberately small so upstream fixes stay easy to merge.
   a lone `\r` is how software overwrites a line in place, and full screen
   editors do it constantly.
 
-- Added `term_get_scroll()` and `term_reserve_bottom()`. A scroll erases the
-  row below the last text row, which is where `srcsim/status.c` keeps the
-  status block; once reserved, that row is left to its owner.
-- Added `lcd_set_scroll_hook()` and `lcd_get_scroll()`. The hook runs on core 0
-  either side of the scroll register write, so the status block can be redrawn
-  in step with the scroll rather than racing it from the other core.
+- Added `term_get_scroll()`.
+- Added `lcd_scroll_area()`, which sets the controller's vertical scroll
+  definition so only the top `height` lines scroll and the rest of the panel
+  stays fixed; `srcsim/status.c` keeps the status block there. The terminal
+  wraps its rows through `lcd_scroll_height` rather than the full 480 lines,
+  clears only that much on a clear screen, and a scroll now erases the rows it
+  brings into view instead of the one after them, since with the scroll area
+  exactly one screen tall those are the rows just leaving the top.
 
 - Added `term_set_observer()`, reported from the four places that change what
   is on screen: a character drawn, the screen cleared, a row cleared, and a row

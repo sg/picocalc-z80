@@ -445,6 +445,25 @@ void net_autoconnect(void)
 #endif
 
 /*
+ * The status block takes the rows the terminal is denied, below the panel's
+ * scroll area so that it holds still while the text scrolls.
+ */
+static void fit_terminal(void)
+{
+	if (status_enabled && (font.term_height > STATUS_ROWS + 1)) {
+		font.term_height -= STATUS_ROWS;
+		lcd_scroll_area(font.term_height * font.glyph_height);
+	} else
+		lcd_scroll_area(0);
+
+	/* the terminal is a different width now, so the history is stale */
+	scrollback_clear();
+	lcd_clear();
+	term_clear();
+	status_paint();
+}
+
+/*
  * Load the configured font, falling back to the built-in one. Changing it
  * changes the number of rows and columns, so the screen is cleared after.
  */
@@ -461,24 +480,13 @@ void apply_font(void)
 	if (font_file[0] && (lcd_load_font(font_file) != FR_OK)) {
 		font_file[0] = '\0';
 		lcd_load_font(NULL);
-		if (status_enabled && (font.term_height > STATUS_ROWS + 1))
-			font.term_height -= STATUS_ROWS;
-		scrollback_clear();
-		term_clear();
+		fit_terminal();
 		printf("font not found, using the built-in one\n\n");
 		return;
 	}
 	if (!font_file[0])
 		lcd_load_font(NULL);
-
-	/* the status block lives in the rows the terminal is denied */
-	if (status_enabled && (font.term_height > STATUS_ROWS + 1))
-		font.term_height -= STATUS_ROWS;
-
-	/* the terminal is a different width now, so the history is stale */
-	scrollback_clear();
-	term_clear();
-	status_paint();
+	fit_terminal();
 }
 
 /*
