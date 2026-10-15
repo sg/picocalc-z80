@@ -190,8 +190,7 @@ static void z80_main(void)
 #endif
 
 	/* print banner */
-	printf("\fZ80pack release %s, %s\n\n", RELEASE, COPYR);
-	printf("%s release %s\n", USR_COM, USR_REL);
+	printf("\f%s release %s\n", USR_COM, USR_REL);
 	printf("running on ARM %s cores at %i MHz\n",
 #if PICO_RP2040
 	       "Cortex-M0+",
@@ -199,7 +198,9 @@ static void z80_main(void)
 	       "Cortex-M33",
 #endif
 	       SYS_CLK_MHZ);
-	printf("%s\n\n", USR_CPR);
+	printf("%s\n", USR_CPR);
+	printf("<steve@stevegibson.com>\n\n");
+	printf("Based on:\nZ80pack release %s, %s\n\n", RELEASE, COPYR);
 
 #ifdef WANT_ICE
 	/* if ICE compiled in print some hints */
