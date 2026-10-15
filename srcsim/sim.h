@@ -28,7 +28,7 @@
 #define WANT_HB		/* hardware breakpoint */
 #endif
 
-#define USR_COM "picocalc-z80"
+#define USR_COM "PicoCalc-Z80"
 #ifndef USR_REL		/* CMakeLists.txt passes git describe */
 #define USR_REL "unknown"
 #endif
