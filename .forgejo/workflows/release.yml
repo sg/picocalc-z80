@@ -1,4 +1,4 @@
-# Builds the firmware for every board plus the MicroSD card zip for a tag
+# Builds the firmware for every board plus the MicroSD card archive for a tag
 # and stages them as a draft release to review and publish by hand.
 # Runs when a tag such as v1.2.0 is pushed, or on demand for an existing tag.
 name: Release
@@ -45,7 +45,7 @@ jobs:
           cd src && ./build.sh all "$TAG"
 
       - name: Pack the MicroSD card files
-        run: VERSION="$TAG" src/make-sd-archive.sh "dist/sd_files-$TAG.zip"
+        run: VERSION="$TAG" src/make-sd-archive.sh "dist/sd_files-$TAG.tar.gz"
 
       - name: Stage a draft release
         run: |
@@ -57,7 +57,7 @@ jobs:
             exit 1
           fi
 
-          (cd dist && sha256sum *.uf2 *.zip > SHA256SUMS.txt)
+          (cd dist && sha256sum *.uf2 *.tar.gz > SHA256SUMS.txt)
 
           # the previous tag bounds the change list; the first release lists everything
           prev=$(git -C src describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
