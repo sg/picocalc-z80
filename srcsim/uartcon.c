@@ -31,6 +31,10 @@ static volatile bool rx_stopped;
 /* time_us_32() when a program last touched the raw port, 0 for never */
 static volatile uint32_t raw_last;
 
+/* reads of the raw port that have not yet claimed it, see raw_poll() */
+#define RAW_POLLS	100
+static uint32_t poll_last, poll_count;
+
 static void (*chars_available_callback)(void *);
 static void *chars_available_param;
 
@@ -47,6 +51,12 @@ static bool raw_active(void)
 
 static void send_flow(char c);
 
+/* not now | 1, which can lie a microsecond ahead and so read as expired */
+static void raw_touch(uint32_t now)
+{
+	raw_last = now ? now : 1;
+}
+
 static void raw_claim(void)
 {
 	/* console typing still queued would reach the transfer program first */
@@ -57,7 +67,29 @@ static void raw_claim(void)
 			send_flow(XON);
 		}
 	}
-	raw_last = time_us_32() | 1;
+	raw_touch(time_us_32());
+}
+
+/*
+ * A port scan such as SURVEY's reads each port once or twice, and claiming
+ * the line for that would swallow the console for a second, so a read only
+ * counts once it is part of a sustained polling loop.
+ */
+static bool raw_poll(void)
+{
+	uint32_t now = time_us_32();
+
+	if (raw_active()) {
+		raw_touch(now);
+		return true;
+	}
+	if (now - poll_last > 10000)
+		poll_count = 0;
+	poll_last = now;
+	if (++poll_count < RAW_POLLS)
+		return false;
+	raw_claim();
+	return true;
 }
 
 static void send_flow(char c)
@@ -150,13 +182,12 @@ static stdio_driver_t stdio_uartcon = {
 
 bool uartcon_raw_rx_ready(void)
 {
-	raw_claim();
-	return rx_tail != rx_head;
+	return raw_poll() && rx_tail != rx_head;
 }
 
 bool uartcon_raw_tx_ready(void)
 {
-	raw_claim();
+	raw_poll();
 	return uart_is_writable(UARTCON);
 }
 
@@ -164,8 +195,7 @@ uint8_t uartcon_raw_getc(void)
 {
 	static uint8_t last;
 
-	raw_claim();
-	if (rx_tail != rx_head) {
+	if (raw_poll() && rx_tail != rx_head) {
 		last = (uint8_t) rx_buf[rx_tail & (RX_SIZE - 1)];
 		rx_tail++;
 	}
@@ -189,6 +219,9 @@ void uartcon_init(void)
 	uart_init(UARTCON, PICOCALC_UART_BAUD);
 
 	irq_set_exclusive_handler(UART_IRQ_NUM(UARTCON), uartcon_irq);
+	/* the keyboard timer holds core 0 for ~5 ms of 10 kHz I2C, longer
+	   than the 32 byte FIFO lasts at 115200, so this must preempt it */
+	irq_set_priority(UART_IRQ_NUM(UARTCON), PICO_HIGHEST_IRQ_PRIORITY);
 	irq_set_enabled(UART_IRQ_NUM(UARTCON), true);
 	uart_set_irqs_enabled(UARTCON, true, false);
 

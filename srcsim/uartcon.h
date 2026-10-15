@@ -9,9 +9,10 @@
  * paced with XON/XOFF, since the CH340's RTS/CTS are not wired.
  *
  * The raw functions give a CP/M transfer program the same line with no
- * translation in either direction. Using them takes the line away from the
- * console - its output stops going to the host and its input stops reading
- * the buffer - until they have gone unused for a second.
+ * translation in either direction. Writing to them, or polling them in a
+ * loop, takes the line away from the console - its output stops going to the
+ * host and its input stops reading the buffer - until they have gone unused
+ * for a second. A few stray reads, as from a port scan, do not.
  */
 
 #ifndef UARTCON_INC
