@@ -183,11 +183,18 @@ bool scrollback_key(const input_event_t *ev)
 		if (want > limit)
 			want = limit;
 		if (want != offset) {
+			/* the cursor would blink the live text through
+			   the history, so it stays off the screen until
+			   the view is back at the bottom */
+			if (offset == 0)
+				term_hold_cursor(true);
 			offset = want;
 			/* a held key queues faster than a repaint takes, so
 			   only draw once the run of them has been consumed */
 			if (!keyboard_key_available())
 				repaint();
+			if (offset == 0)
+				term_hold_cursor(false);
 		}
 		return true;
 	}
@@ -199,6 +206,7 @@ bool scrollback_key(const input_event_t *ev)
 	if ((ev->state == KEY_STATE_PRESSED) && (offset != 0)) {
 		offset = 0;
 		repaint();
+		term_hold_cursor(false);
 	}
 	return false;
 }

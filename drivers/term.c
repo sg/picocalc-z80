@@ -71,6 +71,7 @@ typedef struct {
 	bool cursor_enabled;
 	bool cursor_visible;
 	bool cursor_manual;
+	bool cursor_held;
 	bool c_inverse;
 	bool c_bold;
 } ansi_t;
@@ -87,12 +88,118 @@ static ansi_t ansi = {
 	.c_bold=false,
 };
 
-static int ansi_len_to_lcd_x(int len) {
-	return ((ansi.x + len) % font.term_width) * font.glyph_width;
+static int len_col(int len) {
+	return (ansi.x + len) % font.term_width;
 }
 
-static int ansi_len_to_lcd_y(int len) {
-	return (ansi.y + (len + ansi.x) / font.term_width) * font.glyph_height % lcd_scroll_height;
+static int len_row(int len) {
+	return ansi.y + (ansi.x + len) / font.term_width;
+}
+
+/*
+ * The panel cannot be read back, so a shadow of every cell in the scroll
+ * ring is kept for the cursor, which shows its cell inverted and then puts
+ * it back. Colours go through a table so that a cell is three bytes.
+ */
+typedef struct { u8 c, fg, bg; } cell_t;
+
+static cell_t *cells;
+static int cells_cols, cells_rows;
+static u16 colors[256];
+static int ncolors;
+
+static u8 color_index(u16 color) {
+	int i, best = 0, bestd = 0x7fffffff;
+	for (i = 0; i < ncolors; i++)
+		if (colors[i] == color) return i;
+	if (ncolors < 256) {
+		colors[ncolors] = color;
+		return ncolors++;
+	}
+	// only 240 distinct 24 bit colours get here, then the nearest one has to do
+	for (i = 0; i < ncolors; i++) {
+		int d = abs(RED(colors[i]) - RED(color)) + abs(GREEN(colors[i]) - GREEN(color)) + abs(BLUE(colors[i]) - BLUE(color));
+		if (d < bestd) { bestd = d; best = i; }
+	}
+	return best;
+}
+
+// the shadow follows the font and the scroll area, which only change through term_clear()
+static void cells_fit() {
+	int rows = (lcd_scroll_height + font.glyph_height - 1) / font.glyph_height;
+	int cols = font.term_width;
+	if (!ncolors) {
+		memcpy(colors, palette, sizeof(palette));
+		ncolors = 16;
+	}
+	if (cells && rows == cells_rows && cols == cells_cols) return;
+	cell_t *old = cells;
+	// the blink timer on the other core reads this, so it must never pair the old block with the new size
+	cells = NULL;
+	free(old);
+	cells_rows = rows;
+	cells_cols = cols;
+	cells = malloc(rows * cols * sizeof(cell_t));
+}
+
+static cell_t *cell_at(int col, int row) {
+	if (!cells || col < 0 || col >= cells_cols) return NULL;
+	row %= cells_rows;
+	if (row < 0) row += cells_rows;
+	return cells + row * cells_cols + col;
+}
+
+static void shadow_char(int col, int row, u16 fg, u16 bg, char c) {
+	cell_t *cell = cell_at(col, row);
+	if (cell) {
+		cell->c = c;
+		cell->fg = color_index(fg);
+		cell->bg = color_index(bg);
+	}
+	// drawing over the cursor takes it off the screen, so a later blink-off must not put it back
+	if (ansi.cursor_visible && ansi.cy == row && ansi.cx == col) ansi.cursor_visible = false;
+}
+
+static void shadow_blank(int col, int row, int ncols, u16 bg) {
+	u8 fgi = color_index(ansi.fg), bgi = color_index(bg);
+	for (int i = col; i < col + ncols; i++) {
+		cell_t *cell = cell_at(i, row);
+		if (cell) {
+			cell->c = ' ';
+			cell->fg = fgi;
+			cell->bg = bgi;
+		}
+	}
+	if (ansi.cursor_visible && ansi.cy == row && ansi.cx >= col && ansi.cx < col + ncols) ansi.cursor_visible = false;
+}
+
+static int row_y(int row) {
+	return (row * font.glyph_height) % lcd_scroll_height;
+}
+
+// a row that straddles the end of the ring is drawn again at the top
+static void paint_char(int col, int row, u16 fg, u16 bg, char c) {
+	int x = col * font.glyph_width, y = row_y(row);
+	lcd_draw_char(x, y, fg, bg, c);
+	if (y > lcd_scroll_height - font.glyph_height)
+		lcd_draw_char(x, y - lcd_scroll_height, fg, bg, c);
+}
+
+static void paint_fill(int col, int row, int width, u16 bg) {
+	int x = col * font.glyph_width, y = row_y(row);
+	lcd_fill(bg, x, y, width, font.glyph_height);
+	if (y > lcd_scroll_height - font.glyph_height)
+		lcd_fill(bg, x, y - lcd_scroll_height, width, font.glyph_height);
+}
+
+static void put_char(int col, int row, u16 fg, u16 bg, char c) {
+	shadow_char(col, row, fg, bg, c);
+	paint_char(col, row, fg, bg, c);
+}
+
+static void put_blank(int col, int row, int ncols, u16 bg) {
+	shadow_blank(col, row, ncols, bg);
+	paint_fill(col, row, ncols * font.glyph_width, bg);
 }
 
 static void (*observer)(int what, int x, int y, char c) = NULL;
@@ -121,61 +228,79 @@ void term_scroll(int lines) {
 	}
 }
 
-void term_clear() {
+void term_reset() {
 	observe(TERM_OBS_CLEAR, 0, 0, 0);
 	ansi.x = ansi.y = ansi.len = 0;
-	// whatever sits below the scroll area is not the terminal's to clear
-	lcd_fill(0, 0, 0, LCD_WIDTH, lcd_scroll_height);
 	lcd_scroll(0);
 	ansi.scroll = 0;
+	cells_fit();
+	if (cells) {
+		cell_t blank = { ' ', color_index(ansi.fg), color_index(0) };
+		for (int i = 0; i < cells_rows * cells_cols; i++) cells[i] = blank;
+	}
+	ansi.cursor_visible = false;
 }
 
-static void term_draw_char(int x, int y, u16 fg, u16 bg, char c) {
-	y %= lcd_scroll_height;
-	lcd_draw_char(x, y, fg, bg, c);
-	if (y > lcd_scroll_height - font.glyph_height)
-		lcd_draw_char(x, y - lcd_scroll_height, fg, bg, c);
-}
-
-static void term_erase_char(int x, int y, u16 bg) {
-	y %= lcd_scroll_height;
-	lcd_fill(bg, x, y, font.glyph_width, font.glyph_height);
-	if (y > lcd_scroll_height - font.glyph_height)
-		lcd_fill(bg, x, y - lcd_scroll_height, font.glyph_width, font.glyph_height);
+void term_clear() {
+	// whatever sits below the scroll area is not the terminal's to clear
+	lcd_fill(0, 0, 0, LCD_WIDTH, lcd_scroll_height);
+	term_reset();
 }
 
 void term_erase_line(int y) {
 	observe(TERM_OBS_ERASE_ROW, 0, y, 0);
-	y = (y * font.glyph_height) % lcd_scroll_height;
-	lcd_fill(ansi.bg, 0, y, LCD_WIDTH, font.glyph_height);
-	if (y > lcd_scroll_height - font.glyph_height)
-		lcd_fill(ansi.bg, 0, y - lcd_scroll_height, LCD_WIDTH, font.glyph_height);
+	shadow_blank(0, y, font.term_width, ansi.bg);
+	paint_fill(0, y, LCD_WIDTH, ansi.bg);
 }
 
 void term_erase_from_cursor() {
 	observe(TERM_OBS_ERASE_EOL, ansi.x, ansi.y, 0);
-	int x = ansi.x * font.glyph_width;
-	int y = (ansi.y * font.glyph_height) % lcd_scroll_height;
-	lcd_fill(ansi.bg, x, y, LCD_WIDTH - x, font.glyph_height);
-	if (y > lcd_scroll_height - font.glyph_height)
-		lcd_fill(ansi.bg, x, y - lcd_scroll_height, LCD_WIDTH - x, font.glyph_height);
+	shadow_blank(ansi.x, ansi.y, font.term_width - ansi.x, ansi.bg);
+	paint_fill(ansi.x, ansi.y, LCD_WIDTH - ansi.x * font.glyph_width, ansi.bg);
+}
+
+static void cursor_cell(int *col, int *row) {
+	*col = len_col(ansi.len);
+	*row = len_row(ansi.len);
+	// a line that has just filled its last column keeps the cursor there until the next character wraps
+	if (ansi.len == 0 && ansi.x >= font.term_width) {
+		*col = font.term_width - 1;
+		*row = ansi.y;
+	}
+}
+
+// the block is the cell under it in inverse video, so nothing is lost when it blinks off
+static void paint_cursor(bool on) {
+	cell_t *cell = cell_at(ansi.cx, ansi.cy);
+	if (cell) {
+		u16 fg = colors[cell->fg], bg = colors[cell->bg];
+		paint_char(ansi.cx, ansi.cy, on ? bg : fg, on ? fg : bg, cell->c);
+	} else {
+		// without a shadow to put back, only a bar that covers nothing will do
+		paint_fill(ansi.cx, ansi.cy, 1, on ? ansi.fg : ansi.bg);
+	}
 }
 
 static void draw_cursor() {
-	if (ansi.cursor_enabled && !ansi.cursor_visible) {
-		ansi.cx = ansi_len_to_lcd_x(ansi.len);
-		ansi.cy = ansi_len_to_lcd_y(ansi.len);
-		// this used to be an underline but without a buffer of what it draws over, it causes too many artifacts
-		lcd_fill(ansi.fg, ansi.cx, ansi.cy, 1, font.glyph_height - 1);
+	if (ansi.cursor_enabled && !ansi.cursor_held && !ansi.cursor_visible) {
+		cursor_cell(&ansi.cx, &ansi.cy);
+		paint_cursor(true);
 		ansi.cursor_visible = true;
 	}
 }
 
 static void erase_cursor() {
 	if (ansi.cursor_enabled && ansi.cursor_visible) {
-		lcd_fill(ansi.bg, ansi.cx, ansi.cy, 1, font.glyph_height - 1);
+		paint_cursor(false);
 		ansi.cursor_visible = false;
 	}
+}
+
+void term_hold_cursor(bool hold) {
+	ansi.cursor_held = hold;
+	ansi.cursor_manual = true;
+	if (hold) erase_cursor();
+	else draw_cursor();
 }
 
 static bool on_cursor_timer(repeating_timer_t *rt) {
@@ -252,7 +377,7 @@ void term_blit(const char* text, const char* fg, const char* bg) {
 		if (*lbg >= '0' && *lbg <= '9') pbg = palette[*lbg - '0'];
 		else if (*lbg >= 'a' && *lbg <= 'f') pbg = palette[*lbg - 'a' + 10];
 		else if (*lbg >= 'A' && *lbg <= 'F') pbg = palette[*lbg - 'A' + 10];
-		term_draw_char(ansi.x * font.glyph_width, ansi.y * font.glyph_height, pfg, pbg, *text);
+		put_char(ansi.x, ansi.y, pfg, pbg, *text);
 		ansi.x += 1;
 		if (ansi.x > font.term_width) return;
 		text ++;
@@ -294,10 +419,7 @@ static void out_char(char c) {
 		if (c == '\t') c = ' ';
 		if (c >= 32 && c < 127) {
 			should_scroll();
-			// the glyph covers the cursor bar, so a later blink-off must not erase over it
-			if (ansi.cursor_visible && ansi.cx == ansi.x * font.glyph_width && ansi.cy == ansi.y * font.glyph_height % lcd_scroll_height)
-				ansi.cursor_visible = false;
-			term_draw_char(ansi.x * font.glyph_width, ansi.y * font.glyph_height, fg, bg, c);
+			put_char(ansi.x, ansi.y, fg, bg, c);
 			observe(TERM_OBS_CHAR, ansi.x, ansi.y, c);
 			ansi.x += 1;
 		}
@@ -438,20 +560,16 @@ stdio_driver_t stdio_picocalc = {
 };
 
 static void term_erase_input(int size) {
-	for (int i = 0; i < size + 1; i++) {
-		int x = ansi_len_to_lcd_x(i), y = ansi_len_to_lcd_y(i);
-		term_erase_char(x, y, ansi.bg);
-	}
+	for (int i = 0; i < size + 1; i++)
+		put_blank(len_col(i), len_row(i), 1, ansi.bg);
 }
 
 // TODO: this should be less specialized
 static void term_draw_input(char* buffer, int size, int cursor) {
 	if (ansi.y + (size + ansi.x) / font.term_width >= font.term_height) term_scroll(ansi.y + (size + ansi.x) / font.term_width - (font.term_height-1));
 	for (int i = 0; i < size + 1; i++) {
-		int x = ansi_len_to_lcd_x(i), y = ansi_len_to_lcd_y(i);
-		if (i < size) term_draw_char(x, y, ansi.fg, ansi.bg, buffer[i]);
-		else term_erase_char(x, y, ansi.bg);
-		//if (ansi.cursor_enabled && i == cursor) lcd_fifo_fill(ansi.fg, x, y + font.glyph_height - 3, font.glyph_width, 2);
+		if (i < size) put_char(len_col(i), len_row(i), ansi.fg, ansi.bg, buffer[i]);
+		else put_blank(len_col(i), len_row(i), 1, ansi.bg);
 	}
 }
 

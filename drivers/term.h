@@ -29,6 +29,8 @@ void stdio_picocalc_init();
 void stdio_picocalc_deinit();
 void stdio_picocalc_out_chars(const char *buf, int length);
 void term_clear();
+/* start over at the top of a screen something else has already blanked */
+void term_reset();
 void term_scroll(int lines);
 void term_erase_line(int y);
 int term_get_width();
@@ -44,5 +46,7 @@ void term_set_fg(u16 color);
 void term_set_bg(u16 color);
 bool term_get_blinking_cursor();
 void term_set_blinking_cursor(bool enabled);
+/* keep the cursor off the screen while something else owns it, leaving the program's setting alone */
+void term_hold_cursor(bool hold);
 void term_blit(const char* text, const char* fg, const char* bg);
 int term_readline(const char* prompt, char* buffer, int max_length, history_t* history);

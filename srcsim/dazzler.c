@@ -406,8 +406,7 @@ void dazzler_poll(void)
 		/* term_clear() would repeat the whole-screen fill undone
 		   above, so reset the terminal's own state instead */
 		save = save_and_disable_interrupts();
-		term_scroll(0);
-		term_set_pos(0, 0);
+		term_reset();
 		term_set_blinking_cursor(true);
 		restore_interrupts(save);
 		status_paint();

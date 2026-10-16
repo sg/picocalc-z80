@@ -64,11 +64,14 @@ Kept deliberately small so upstream fixes stay easy to merge.
   ring rather than ten rows down the screen — full screen software drew in the
   wrong place as soon as anything had scrolled past. It now adds `ansi.scroll`.
 
-- The blinking cursor is a one pixel bar on the left edge of its cell, and
-  blinking off fills that column at the remembered position. A character typed
-  into the cell overwrote the bar, but the cursor stayed marked visible, so the
-  next blink-off erased the left column of the new glyph. `out_char()` now marks
-  the cursor hidden when it draws over it.
+- The blinking cursor is a block: the cell under it drawn in inverse video,
+  put back as it was when it blinks off. The panel cannot be read back, so
+  `term.c` keeps a shadow of every cell in the scroll ring, three bytes each
+  (the character and two indices into a colour table), allocated to fit the
+  font and the scroll area whenever `term_reset()` runs. A character drawn or
+  erased over the cursor marks it hidden, so the next blink-off does not paint
+  the old cell back over the new one. `term_hold_cursor()` keeps it off the
+  screen while scrollback shows history in its place.
 
 ## Input translation lives elsewhere
 
