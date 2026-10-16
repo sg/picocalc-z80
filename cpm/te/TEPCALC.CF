@@ -1,0 +1,57 @@
+# ========================================
+# Default TE configuration for:
+#            picocalc-z80, 5x9 font, 64x32
+# ========================================
+te.confName = "PicoCalc 64x32 & WordStar keys"
+
+screen.rows = 32
+screen.columns = 64
+
+screen.rulerChar = .
+screen.rulerTabChar = !
+screen.vertChar = |
+screen.horizChar = -
+screen.lineNumbersChar = |
+
+editor.maxLines = 1024
+editor.tabSize = 4
+editor.lineNumbers = true
+editor.c_language = true
+editor.autoIndent = true
+editor.autoList = true
+editor.listBullets = "-*>"
+
+keyname.newLine = ENTER
+keyname.escape = ESC
+
+# WordStar keys; the arrow, Home, End, PgUp, PgDn and Del keys arrive
+# as these whichever way the K setting of the config dialog is set
+key.up = ^E
+key.down = ^X
+key.left = ^S
+key.right = ^D
+key.begin = ^QS
+key.end = ^QD
+key.top = ^QR
+key.bottom = ^QC
+key.pgUp = ^R
+key.pgDown = ^C
+key.indent = ^I
+key.newLine = ^M
+key.escape = ^[
+key.delRight = ^G
+key.delLeft = ^H
+key.cut = ^Y
+key.copy = ^O
+key.paste = ^W
+key.delete = ^KY
+key.clearClip = ^T
+key.find = ^QF
+key.findNext = ^L
+key.goLine = ^J
+key.wordLeft = ^A
+key.wordRight = ^F
+key.blockStart = ^KB
+key.blockEnd = ^KK
+key.blockUnset = ^KU
+key.macro = ^QM

@@ -8,3 +8,9 @@
 [submodule "submodules/uzlib"]
 	path = submodules/uzlib
 	url = https://github.com/pfalcon/uzlib.git
+[submodule "submodules/te"]
+	path = submodules/te
+	url = https://github.com/MiguelVis/te.git
+[submodule "submodules/mescc"]
+	path = submodules/mescc
+	url = https://github.com/MiguelVis/mescc.git
