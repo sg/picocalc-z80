@@ -13,6 +13,7 @@ taken from Pico-Eval-Board-80/srccpm2/bios.asm. Parameters come from its DPB:
     cpmdisk.py list    disk.dsk [-u N]
     cpmdisk.py get     disk.dsk [N:]NAME.EXT [outfile] [-u N]
     cpmdisk.py put     disk.dsk file [file ...] [-u N]
+    cpmdisk.py era     disk.dsk [N:]NAME.EXT [...] [-u N]
     cpmdisk.py mkhd    disk.hdd            create a blank 4 MB hard disk
     cpmdisk.py sysgen  disk.dsk boot.bin cpm.bin bios.bin
 
@@ -316,6 +317,24 @@ def cmd_put(path, files, user=0):
     open(path, 'wb').write(img)
 
 
+def cmd_era(path, names, user=0):
+    img = bytearray(open(path, 'rb').read())
+    fmt = format_for(img)
+    check_user(user)
+    live, _ = scan(img, fmt)
+    for name in names:
+        name, u = split_user(name, user)
+        want = name.upper()
+        hits = [i for i, e in live if e[0] == u and entry_name(e) == want]
+        if not hits:
+            raise SystemExit("%s: not in user %d" % (want, u))
+        for i in hits:
+            e = dir_entry(img, fmt, i)
+            put_dir_entry(img, fmt, i, bytes([EMPTY]) + e[1:])
+        print("%d:%s erased, %d extent(s)" % (u, want, len(hits)))
+    open(path, 'wb').write(img)
+
+
 def cmd_mkhd(path):
     """A blank hard disk: everything 0xE5, which is what CP/M calls empty."""
     fmt = HARDDISK
@@ -392,6 +411,10 @@ def main(argv):
         if not rest:
             raise SystemExit("put needs at least one file")
         cmd_put(path, rest, 0 if user is None else user)
+    elif cmd == 'era':
+        if not rest:
+            raise SystemExit("era needs at least one file name")
+        cmd_era(path, rest, 0 if user is None else user)
     elif cmd == 'mkhd':
         cmd_mkhd(path)
     elif cmd == 'sysgen':
