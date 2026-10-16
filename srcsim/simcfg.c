@@ -704,8 +704,10 @@ again:
 
 		case 'l':
 			prompt_fn(s);
-			if (s[0])
-				load_file(s);
+			/* run from the program rather than the boot ROM, which
+			   would read the boot sector of A: over it */
+			if (s[0] && load_file(s))
+				PC = 0;
 			putchar('\n');
 			break;
 
