@@ -44,6 +44,7 @@
 #define DISKS_DIR	Z80_DIR "disks/"
 #define CODE_DIR	Z80_DIR "code/"
 #define XFER_DIR	Z80_DIR "xfer/"
+#define FONTS_DIR	Z80_DIR "fonts/"
 
 /* longest of the above, plus 8.3 name */
 #define DISKLEN	(sizeof(DISKS_DIR) - 1 + FNLEN + 4)

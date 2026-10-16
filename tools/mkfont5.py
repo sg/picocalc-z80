@@ -13,7 +13,7 @@ next character; they are redrawn here to fit in 4.
 
 The file layout is the one described in mkfont.py.
 
-    python3 tools/mkfont5.py sd_files/Z80
+    python3 tools/mkfont5.py sd_files/Z80/fonts
 """
 
 import gzip

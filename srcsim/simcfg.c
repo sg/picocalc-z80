@@ -160,6 +160,16 @@ void read_config(void)
 		f_read(&sd_file, &disks[HD_SLOT], DISKLEN+1, &br);
 		f_read(&sd_file, &keymap_arrows, sizeof(keymap_arrows), &br);
 		f_read(&sd_file, &font_file, DISKLEN+1, &br);
+		/* the fonts moved from /Z80 into /Z80/fonts, and an older
+		   config still names them where they were */
+		if (!strncmp(font_file, Z80_DIR, sizeof(Z80_DIR) - 1)
+		    && !strchr(font_file + sizeof(Z80_DIR) - 1, '/')) {
+			char name[DISKLEN+1];
+
+			strcpy(name, font_file + sizeof(Z80_DIR) - 1);
+			strcpy(font_file, FONTS_DIR);
+			strcat(font_file, name);
+		}
 		if (version >= 2) {
 			f_read(&sd_file, &wifi_country, sizeof(wifi_country),
 			       &br);
@@ -637,7 +647,7 @@ void config(void)
 		case 'v':
 			prompt_fn(s);
 			if (s[0]) {
-				strcpy(font_file, Z80_DIR);
+				strcpy(font_file, FONTS_DIR);
 				strcat(font_file, s);
 				strcat(font_file, ".FNT");
 			} else

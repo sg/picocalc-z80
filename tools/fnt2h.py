@@ -3,7 +3,7 @@
 Turn a .FNT file into drivers/default_font.h, the font compiled into the
 firmware and used when no font file is configured or it cannot be read.
 
-    python3 tools/fnt2h.py sd_files/Z80/5X9.FNT drivers/default_font.h
+    python3 tools/fnt2h.py sd_files/Z80/fonts/5X9.FNT drivers/default_font.h
 """
 
 import os
