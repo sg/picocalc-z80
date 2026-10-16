@@ -56,6 +56,7 @@ build_board() {
 
     if ! PICO_SDK_PATH="$PICO_SDK_PATH" cmake \
         -DPICO_BOARD="$pico_board" \
+        -DPICOCALC_BOARD="$board" \
         -DPICOCALC_VERSION="$build_num" \
         -B "$build_dir" -S . ; then
         echo "*** cmake failed for $board ***"

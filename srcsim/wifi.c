@@ -20,6 +20,7 @@
 
 #include "net_vars.h"
 #include "netsock.h"
+#include "http.h"
 #include "rtc_compat.h"
 #include "wifi.h"
 
@@ -506,6 +507,7 @@ void wifi_service(void)
 	}
 
 	ns_service(state != WIFI_OFF);
+	http_service(state != WIFI_OFF);
 
 	if (state == WIFI_OFF)
 		return;

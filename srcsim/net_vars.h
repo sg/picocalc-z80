@@ -22,6 +22,7 @@
 #define HOST_NAME_MAX	63
 #define DEFAULT_NTP	"pool.ntp.org"
 #define MODEM_INIT_LEN	63
+#define UPDATE_URL_LEN	127
 
 extern char wifi_ssid[WIFI_SSID_LEN+1];
 extern char wifi_password[WIFI_PWD_LEN+1];
@@ -30,5 +31,6 @@ extern int utc_offset;
 extern char wifi_country[3];	/* ISO 3166 alpha-2, empty for worldwide */
 extern int wifi_autoconnect;
 extern char modem_init_str[MODEM_INIT_LEN+1];
+extern char update_url[UPDATE_URL_LEN+1];	/* a repository page, see update.h */
 
 #endif /* !NET_VARS_INC */

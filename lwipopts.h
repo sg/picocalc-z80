@@ -37,6 +37,7 @@
 #define LWIP_DNS                    1
 #define LWIP_DHCP                   1
 #define LWIP_TCP_KEEPALIVE          1
+#define LWIP_ALTCP                  1	/* the HTTP client, so TLS can slot in */
 #define TCP_MSS                     1460
 #define TCP_WND                     (4 * TCP_MSS)
 #define TCP_SND_BUF                 (2 * TCP_MSS)

@@ -47,6 +47,8 @@
 #include "net_vars.h"
 #ifdef PICOCALC_WIFI
 #include "wifi.h"
+#include "update.h"
+#include "version.h"
 #endif
 
 static datetime_t t = { .year = 2024, .month = 1, .day = 1, .dotw = 1,
@@ -117,7 +119,7 @@ static int get_int(const char *prompt, const char *hint,
  * straight with the CPU type, which can never read as this magic.
  */
 #define CFG_MAGIC	"PC80"
-#define CFG_VERSION	2
+#define CFG_VERSION	3
 
 /*
  * try to read config file
@@ -177,6 +179,10 @@ void read_config(void)
 			       sizeof(wifi_autoconnect), &br);
 			f_read(&sd_file, &modem_init_str, sizeof(modem_init_str), &br);
 		}
+		if (version >= 3) {
+			f_read(&sd_file, &update_url, sizeof(update_url), &br);
+			update_url[UPDATE_URL_LEN] = '\0';
+		}
 		f_close(&sd_file);
 
 		wifi_ssid[WIFI_SSID_LEN] = '\0';
@@ -222,6 +228,7 @@ void save_config(void)
 		f_write(&sd_file, &wifi_autoconnect, sizeof(wifi_autoconnect),
 			&br);
 		f_write(&sd_file, &modem_init_str, sizeof(modem_init_str), &br);
+		f_write(&sd_file, &update_url, sizeof(update_url), &br);
 		f_close(&sd_file);
 	}
 }
@@ -463,6 +470,98 @@ static void net_config(void)
 }
 
 /*
+ * Software update: a check against the release site, and from there the
+ * download. See update.h.
+ */
+static void update_check(void)
+{
+	char tag[32], card[32], s[2];
+	const char *err;
+	bool have_card;
+
+	if (!update_url[0]) {
+		puts("No update URL set, use U to enter one\n");
+		return;
+	}
+	if (wifi_get_state() != WIFI_UP) {
+		puts("No Network - connect to Wifi to check for or download "
+		     "updates\n");
+		return;
+	}
+	have_card = update_card_version(card, sizeof(card));
+	printf("Installed firmware: %s\n", USR_REL);
+	printf("SD card files: %s\n", have_card ? card : "unknown");
+	printf("Checking %s... ", update_url);
+	update_begin();
+	if (!update_latest(tag, sizeof(tag), &err)) {
+		printf("failed: %s\n\n", err);
+		return;
+	}
+	printf("latest release is %s\n\n", tag);
+	if (version_cmp(tag, USR_REL) <= 0 &&
+	    (!have_card || version_cmp(tag, card) <= 0)) {
+		puts("Already up to date\n");
+		return;
+	}
+	printf("Version %s is available\n\n", tag);
+	for (;;) {
+		menu_item("U", "Update to version:", "%s", tag);
+		menu_item("X", "Exit: no action taken", NULL);
+		printf("\n" SGR_KEY "Command:" SGR_OFF " ");
+		get_cmdline(s, 2);
+		putchar('\n');
+		switch (tolower((unsigned char) s[0])) {
+		case 'u':
+			puts("Downloading is not built yet\n");
+			return;
+		case 'x':
+			return;
+		}
+	}
+}
+
+static void update_config(void)
+{
+	bool quit = false;
+	char s[UPDATE_URL_LEN+1];
+	size_t n;
+
+	while (!quit) {
+		menu_item("U", "Set update URL:", "%s",
+			  update_url[0] ? update_url : "(not set)");
+		menu_item("C", "Check for update", NULL);
+		menu_item("X", "Exit: no action taken", NULL);
+
+		printf("\n" SGR_KEY "Command:" SGR_OFF " ");
+		get_cmdline(s, 2);
+		putchar('\n');
+
+		switch (tolower((unsigned char) s[0])) {
+		case 'u':
+			printf("Enter update URL: ");
+			get_cmdline(s, UPDATE_URL_LEN+1);
+			putchar('\n');
+			n = strlen(s);
+			while (n && isspace((unsigned char) s[n - 1]))
+				s[--n] = '\0';
+			if (n)
+				strcpy(update_url, s);
+			break;
+
+		case 'c':
+			update_check();
+			break;
+
+		case 'x':
+			quit = true;
+			break;
+		}
+	}
+	/* the check borrows the machine's memory */
+	update_end();
+}
+
+/*
  * Bring WiFi up in the background at boot, so the banner and the config
  * dialog do not wait for it.
  */
@@ -557,6 +656,7 @@ void config(void)
 #ifdef PICOCALC_WIFI
 			net_status(s_net, sizeof(s_net));
 			menu_item("N", "Network:", "%s", s_net);
+			menu_item("U", "Update PicoCalc-Z80", NULL);
 #endif
 			menu_item("V", "Font:", "%s (%dx%d)",
 				  font_file[0] ? font_file : "built-in",
@@ -593,6 +693,10 @@ void config(void)
 #ifdef PICOCALC_WIFI
 		case 'n':
 			net_config();
+			break;
+
+		case 'u':
+			update_config();
 			break;
 #endif
 

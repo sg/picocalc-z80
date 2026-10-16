@@ -150,6 +150,21 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 	USR_REL="${PICOCALC_VERSION}"
 	USR_CPR_YEARS="${PICOCALC_YEARS}")
 pico_set_program_version(${PROJECT_NAME} "${PICOCALC_VERSION}")
+# the short board name release assets carry, picocalc-z80-<board>-<tag>.uf2,
+# which the update check needs to find its own; build.sh passes it in
+set(PICOCALC_BOARD "" CACHE STRING "short board name used in release file names")
+if(NOT PICOCALC_BOARD)
+	if(PICO_BOARD STREQUAL "pico_w")
+		set(PICOCALC_BOARD "picow")
+	elseif(PICO_BOARD STREQUAL "pico2_w")
+		set(PICOCALC_BOARD "pico2w")
+	elseif(PICO_BOARD STREQUAL "pimoroni_pico_plus2_w_rp2350")
+		set(PICOCALC_BOARD "pim2w")
+	else()
+		set(PICOCALC_BOARD "${PICO_BOARD}")
+	endif()
+endif()
+target_compile_definitions(${PROJECT_NAME} PRIVATE USR_BOARD="${PICOCALC_BOARD}")
 
 # The console is the PicoCalc LCD and keyboard, registered as an stdio driver
 # by drivers/term.c. Enabling USB adds a second console in parallel, which is
@@ -182,6 +197,9 @@ if(PICOCALC_WIFI)
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/wifi.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/netsock.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/modem.c
+		${CMAKE_CURRENT_LIST_DIR}/srcsim/http.c
+		${CMAKE_CURRENT_LIST_DIR}/srcsim/update.c
+		${CMAKE_CURRENT_LIST_DIR}/srcsim/version.c
 		${Z80PACK}/iodevices/libtelnet.c
 	)
 	set_source_files_properties(${Z80PACK}/iodevices/libtelnet.c

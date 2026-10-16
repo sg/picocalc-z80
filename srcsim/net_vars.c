@@ -21,3 +21,4 @@ int utc_offset;
 char wifi_country[3];
 int wifi_autoconnect;
 char modem_init_str[MODEM_INIT_LEN+1];
+char update_url[UPDATE_URL_LEN+1];
