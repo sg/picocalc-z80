@@ -21,7 +21,7 @@
 #include <errno.h>
 
 //#define DISK "../disks/drivea.dsk"
-#define DISK "../disks/cpm22.dsk"
+#define DISK "../sd_files/Z80/disks/CPM22.DSK"
 
 /*
  *	This program writes the CP/M 2.2 OS from the following files

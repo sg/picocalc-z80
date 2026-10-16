@@ -12,7 +12,9 @@ __pycache__/
 
 # CP/M software collected locally, not ours to publish
 /cpm-files/
-/disks/zork*.dsk
+
+# scratch space for disk images; the ones that ship live in sd_files/Z80/disks
+/disks/
 
 # working copies and archives in the project root
 /*.dsk

@@ -76,6 +76,6 @@ cp "$TE"/TECF.COM "$TE"/TETX.COM "$tmp"
 for f in "$TE"/*.M; do
     if grep -q "$(printf '\r')" "$f"; then cp "$f" "$tmp"; else sed 's/$/\r/' "$f" > "$tmp/$(basename "$f")"; fi
 done
-cp "$TOP/disks/empty.dsk" "$OUT"
+$CPMDISK mkdsk "$OUT" >/dev/null
 (cd "$tmp" && $CPMDISK put "$OUT" TE.COM TE.CF TECF.COM TETX.COM *.M >/dev/null)
 $CPMDISK list "$OUT"

@@ -36,7 +36,7 @@ for f in README.TXT XMODEM.CFG; do
     sed 's/$/\r/' "$TOP/cpm/comms/$f" > "$tmp/$f"
 done
 
-cp "$TOP/disks/empty.dsk" "$OUT"
+$CPMDISK mkdsk "$OUT" >/dev/null
 (cd "$tmp" && $CPMDISK put "$OUT" README.TXT QT.COM QT-IMSAI.COM KERMIT.COM \
     KERMIT3.COM XMODEM.COM XMODEM.CFG QTERM.DOC QTCHAT.DOC QTERM.PAT \
     QT-IMSAI.ASM >/dev/null)

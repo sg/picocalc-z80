@@ -5,7 +5,7 @@
 # themselves; this is the one step that has to happen on a PC. Assembles both
 # out of z80pack's cpmtools and writes them into the image with cpmdisk.py.
 #
-#   ./tools/install-xfer.sh disks/cpm22.dsk
+#   ./tools/install-xfer.sh some.dsk
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)

@@ -14,6 +14,7 @@ taken from Pico-Eval-Board-80/srccpm2/bios.asm. Parameters come from its DPB:
     cpmdisk.py get     disk.dsk [N:]NAME [NAME ...] [-o DIR] [-u N]
     cpmdisk.py put     disk.dsk file [file ...] [-u N]
     cpmdisk.py era     disk.dsk [N:]NAME.EXT [...] [-u N]
+    cpmdisk.py mkdsk   disk.dsk            create a blank floppy
     cpmdisk.py mkhd    disk.hdd            create a blank 4 MB hard disk
     cpmdisk.py sysgen  disk.dsk boot.bin cpm.bin bios.bin
 
@@ -376,14 +377,18 @@ def cmd_era(path, names, user=0):
     open(path, 'wb').write(img)
 
 
-def cmd_mkhd(path):
-    """A blank hard disk: everything 0xE5, which is what CP/M calls empty."""
-    fmt = HARDDISK
+def cmd_mkdsk(path, fmt=None):
+    """A blank disk: everything 0xE5, which is what CP/M calls empty."""
+    fmt = fmt or FLOPPY
     img = bytearray([EMPTY]) * fmt.size
     open(path, 'wb').write(img)
     print("%s: %d bytes, %s, %d directory entries, %d KB free"
           % (path, fmt.size, fmt.name, fmt.drm + 1,
              (fmt.dsm + 1 - fmt.dirblks) * fmt.bls // 1024))
+
+
+def cmd_mkhd(path):
+    cmd_mkdsk(path, HARDDISK)
 
 
 def cmd_sysgen(path, boot, cpm, bios):
@@ -464,6 +469,8 @@ def main(argv):
         if not rest:
             raise SystemExit("era needs at least one file name")
         cmd_era(path, rest, 0 if user is None else user)
+    elif cmd == 'mkdsk':
+        cmd_mkdsk(path)
     elif cmd == 'mkhd':
         cmd_mkhd(path)
     elif cmd == 'sysgen':
