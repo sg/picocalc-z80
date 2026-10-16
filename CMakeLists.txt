@@ -199,6 +199,7 @@ if(PICOCALC_WIFI)
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/modem.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/http.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/update.c
+		${CMAKE_CURRENT_LIST_DIR}/srcsim/sha256.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/version.c
 		${Z80PACK}/iodevices/libtelnet.c
 	)

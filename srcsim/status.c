@@ -27,6 +27,7 @@
 #include "wifi.h"
 #include "modem.h"
 #include "netsock.h"
+#include "http.h"
 #endif
 
 #define REPAINT_MS	250
@@ -133,7 +134,7 @@ static int drive_field(char *out, int size, char letter, int slot, int namew)
 
 static void compose_machine(char *line, int width)
 {
-	char left[48], right[32];
+	char left[64], right[32];
 	int nl, nr, gap, i, act;
 #ifdef PICOCALC_WIFI
 	int ncpu;
@@ -175,7 +176,7 @@ static void compose_machine(char *line, int width)
 #ifdef PICOCALC_WIFI
 	/* the network field is the first thing to go on a narrow screen */
 	{
-		char net[32], ip[16], port[8] = "";
+		char net[48], ip[16], port[8] = "", xfer[24] = "";
 		int nn = 0;
 
 		switch (wifi_get_state()) {
@@ -185,9 +186,18 @@ static void compose_machine(char *line, int width)
 			if (ns_listen_port())
 				snprintf(port, sizeof(port), ":%u",
 					 ns_listen_port());
+			/* a download in progress, bytes so far of the total */
+			if (http_active && http_total)
+				snprintf(xfer, sizeof(xfer), "  %lu/%lu",
+					 (unsigned long) http_bytes,
+					 (unsigned long) http_total);
+			else if (http_active && http_bytes)
+				snprintf(xfer, sizeof(xfer), "  %lu",
+					 (unsigned long) http_bytes);
 			if (wifi_get_ip(ip, sizeof(ip)))
-				nn = snprintf(net, sizeof(net), "  %s%s%s", ip,
-					      port, modem_carrier() ? "*" : "");
+				nn = snprintf(net, sizeof(net), "  %s%s%s%s",
+					      ip, port,
+					      modem_carrier() ? "*" : "", xfer);
 			break;
 		case WIFI_JOINING:
 			nn = snprintf(net, sizeof(net), "  WiFi...");
@@ -198,6 +208,9 @@ static void compose_machine(char *line, int width)
 		default:
 			break;
 		}
+		/* on a narrow line the count matters more than the address */
+		if (nn && xfer[0] && nl + nn + 2 + nr > width)
+			nn = snprintf(net, sizeof(net), "%s", xfer);
 		if (nn && nl + nn + 2 + nr <= width &&
 		    nl + nn < (int) sizeof(left)) {
 			memmove(left + ncpu + nn, left + ncpu, nl - ncpu);

@@ -475,7 +475,7 @@ static void net_config(void)
  */
 static void update_check(void)
 {
-	char tag[32], card[32], s[2];
+	char tag[TAG_LEN+1], card[32], s[2];
 	const char *err;
 	bool have_card;
 
@@ -512,7 +512,13 @@ static void update_check(void)
 		putchar('\n');
 		switch (tolower((unsigned char) s[0])) {
 		case 'u':
-			puts("Downloading is not built yet\n");
+			/* the network can drop between the check and the update */
+			if (wifi_get_state() != WIFI_UP) {
+				puts("No Network - connect to Wifi to check for "
+				     "or download updates\n");
+				return;
+			}
+			update_firmware(tag);
 			return;
 		case 'x':
 			return;
