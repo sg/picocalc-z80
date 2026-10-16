@@ -40,6 +40,7 @@ add_executable(${PROJECT_NAME}
 	srcsim/disks.c
 	srcsim/keymap.c
 	srcsim/status.c
+	srcsim/crash.c
 	srcsim/scrollback.c
 	srcsim/dazzler.c
 	srcsim/hostbdos.c
@@ -81,6 +82,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 	# the datetime_t type that pico-sdk only defines by default on RP2040
 	PICO_INCLUDE_RTC_DATETIME=1
 	CONF_FILE="PCALC.DAT"
+	# srcsim/crash.c records a panic and restarts, so the banner can show it
+	PICO_PANIC_FUNCTION=picocalc_panic
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)

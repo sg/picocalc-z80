@@ -21,6 +21,7 @@
 #include "lwip/altcp_tcp.h"
 
 #include "sim.h"
+#include "crash.h"
 #include "http.h"
 
 #define HOST_LEN	63
@@ -236,6 +237,8 @@ void http_service(bool lwip_up)
 {
 	int r = req;
 
+	if (http_active)
+		crash_watch_feed();
 	if (r != REQ_NONE) {
 		if (!lwip_up) {
 			if (r == REQ_OPEN)
@@ -618,6 +621,7 @@ bool http_get(const char *url, http_sink_t sink, void *arg,
 	int hops = 0;
 
 	http_active = true;
+	crash_watch_begin();
 	reply->status = 0;
 	for (;;) {
 		if (!url_parse(url, &u, err) || !send_request(&u, err) ||
@@ -644,6 +648,7 @@ bool http_get(const char *url, http_sink_t sink, void *arg,
 		break;
 	}
 	post(REQ_CLOSE);
+	crash_watch_end();
 	http_active = false;
 	return ok;
 }
@@ -654,10 +659,12 @@ bool http_probe(const char *url, http_reply_t *reply, const char **err)
 	bool chunked, ok;
 
 	http_active = true;
+	crash_watch_begin();
 	reply->status = 0;
 	ok = url_parse(url, &u, err) && send_request(&u, err) &&
 	     read_headers(reply, &chunked, err);
 	post(REQ_CLOSE);
+	crash_watch_end();
 	http_active = false;
 	return ok;
 }

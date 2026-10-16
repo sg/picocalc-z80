@@ -31,6 +31,8 @@
 #include "hardware/uart.h"
 #include "hardware/watchdog.h"
 
+#include "crash.h"
+
 #include "ff.h"
 
 /* PicoCalc drivers */
@@ -204,6 +206,7 @@ static void z80_main(void)
 	printf("Based on:\n  Z80pack release %s\n", RELEASE);
 	printf("  and the Pico-Eval-Board-80 project,\n");
 	printf("  %s\n\n", COPYR);
+	crash_report();
 
 #ifdef WANT_ICE
 	/* if ICE compiled in print some hints */
