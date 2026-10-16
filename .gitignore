@@ -12,6 +12,7 @@ __pycache__/
 
 # CP/M software collected locally, not ours to publish
 /cpm-files/
+/disks/zork*.dsk
 
 # working copies and archives in the project root
 /*.dsk
