@@ -518,7 +518,13 @@ static void update_check(void)
 				     "or download updates\n");
 				return;
 			}
-			update_firmware(tag);
+			printf("This overwrites files in the Z80 directory of "
+			       "the SD card.\nDisk images you have changed are "
+			       "backed up first.\nContinue (y/N)? ");
+			get_cmdline(s, 2);
+			putchar('\n');
+			if (tolower((unsigned char) s[0]) == 'y')
+				update_run(tag);
 			return;
 		case 'x':
 			return;

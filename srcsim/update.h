@@ -34,9 +34,9 @@ extern bool update_card_version(char *buf, size_t len);
 /* the newest release tag at the update URL; false with *err set */
 extern bool update_latest(char *tag, size_t len, const char **err);
 
-/* fetch the release's firmware for this board into the loader's directory,
-   check it against the release's sums file and offer to delete older ones;
-   reports its progress and the result on the console */
-extern bool update_firmware(const char *tag);
+/* install the release: its firmware for this board into the loader's
+   directory, then its SD card files over the Z80 directory, each checked
+   against the release's sums file; reports on the console */
+extern bool update_run(const char *tag);
 
 #endif /* !UPDATE_INC */

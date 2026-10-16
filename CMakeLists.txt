@@ -193,6 +193,8 @@ else()
 	set(PICOCALC_WIFI OFF)
 endif()
 if(PICOCALC_WIFI)
+	# the update's gunzip, submodules/uzlib
+	set(UZLIB ${CMAKE_CURRENT_LIST_DIR}/submodules/uzlib/src)
 	target_sources(${PROJECT_NAME} PRIVATE
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/wifi.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/netsock.c
@@ -201,10 +203,18 @@ if(PICOCALC_WIFI)
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/update.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/sha256.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/version.c
+		${CMAKE_CURRENT_LIST_DIR}/srcsim/untar.c
+		${UZLIB}/tinflate.c
+		${UZLIB}/tinfgzip.c
+		${UZLIB}/crc32.c
+		${UZLIB}/adler32.c
 		${Z80PACK}/iodevices/libtelnet.c
 	)
+	target_include_directories(${PROJECT_NAME} PRIVATE ${UZLIB})
 	set_source_files_properties(${Z80PACK}/iodevices/libtelnet.c
 		PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter;-Wno-sign-compare;-Wno-implicit-fallthrough")
+	set_source_files_properties(${UZLIB}/tinflate.c
+		PROPERTIES COMPILE_OPTIONS "-Wno-sign-compare")
 	target_compile_definitions(${PROJECT_NAME} PRIVATE PICOCALC_WIFI=1)
 	# lwipopts.h is found by include path, from the project root
 	target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR})

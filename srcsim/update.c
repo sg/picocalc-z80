@@ -24,6 +24,7 @@
 #include "version.h"
 #include "sha256.h"
 #include "http.h"
+#include "untar.h"
 #include "update.h"
 
 /* where uf2loader looks for firmware on this chip */
@@ -38,8 +39,9 @@
 #define STR(x)		STR_(x)
 #define TAG_FMT		"%." STR(TAG_LEN) "s"
 #define NAME_FMT	"%." STR(NAME_LEN) "s"
+#define SD_PREFIX	"picocalc-z80-sd-files-"
 #define SUMS_FILE	"SHA256SUMS.txt"
-#define PART_FILE	APPS_DIR "/picocalc-z80.part"
+#define PART_NAME	"picocalc-z80.part"
 
 #define SUMS_SIZE	2048	/* the sums file is under 100 bytes a line */
 #define FILE_BUF	4096
@@ -54,7 +56,8 @@
 #define W_NAMES		(W_FILE + FILE_BUF)
 #define W_END		(W_NAMES + NAMES_MAX * (NAME_LEN + 1))
 
-_Static_assert(W_END <= 65536, "the update work area does not fit bnk0");
+_Static_assert(W_END <= sizeof(bnk0), "the update work area does not fit bnk0");
+_Static_assert(UNTAR_WORK_SIZE <= sizeof(bnk1), "the untar work area does not fit bnk1");
 
 static char *url;
 static char *sums;
@@ -289,9 +292,9 @@ static bool fetch_sums(const char *tag)
 	return true;
 }
 
-/* download to PART_FILE, which becomes path only once the hash matches */
-static bool fetch_file(const char *tag, const char *name, const char *path,
-		       const uint8_t want[SHA256_LEN])
+/* download to part, which becomes path only once the hash matches */
+static bool fetch_file(const char *tag, const char *name, const char *part,
+		       const char *path, const uint8_t want[SHA256_LEN])
 {
 	file_sink_t fs;
 	uint8_t got[SHA256_LEN];
@@ -302,8 +305,8 @@ static bool fetch_file(const char *tag, const char *name, const char *path,
 	fs.fill = 0;
 	fs.err = NULL;
 	sha256_init(&fs.sha);
-	if (f_open(&fs.f, PART_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
-		puts("Cannot create " PART_FILE);
+	if (f_open(&fs.f, part, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
+		printf("Cannot create %s\n", part);
 		return false;
 	}
 	printf("Fetching %s... ", name);
@@ -311,21 +314,21 @@ static bool fetch_file(const char *tag, const char *name, const char *path,
 	f_close(&fs.f);
 	if (!ok) {
 		printf("failed: %s\n", fs.err ? fs.err : err);
-		f_unlink(PART_FILE);
+		f_unlink(part);
 		return false;
 	}
 	sha256_final(&fs.sha, got);
 	if (memcmp(got, want, SHA256_LEN)) {
 		puts("failed: the checksum does not match");
-		f_unlink(PART_FILE);
+		f_unlink(part);
 		return false;
 	}
 	puts("ok, checksum verified");
 
 	/* FatFs will not rename over an existing file */
 	f_unlink(path);
-	if (f_rename(PART_FILE, path) != FR_OK) {
-		printf("Cannot rename " PART_FILE " to %s\n", path);
+	if (f_rename(part, path) != FR_OK) {
+		printf("Cannot rename %s to %s\n", part, path);
 		return false;
 	}
 	return true;
@@ -376,39 +379,82 @@ static void prune_firmware(const char *keep)
 	}
 }
 
-bool update_firmware(const char *tag)
+/* the firmware goes next to the loader; path gets where it landed */
+static bool firmware(const char *tag, char *path, size_t len)
 {
-	char name[NAME_LEN + 1], path[sizeof(APPS_DIR) + NAME_LEN + 1];
+	char name[NAME_LEN + 1];
 	uint8_t want[SHA256_LEN];
 	FRESULT fr;
+
+	snprintf(name, sizeof(name), FW_PREFIX TAG_FMT ".uf2", tag);
+	if (!sum_of(name, want)) {
+		printf("The release has no %s\n", name);
+		return false;
+	}
+	fr = f_mkdir(APPS_DIR);
+	if (fr != FR_OK && fr != FR_EXIST) {
+		puts("Cannot create " APPS_DIR);
+		return false;
+	}
+	snprintf(path, len, APPS_DIR "/%s", name);
+	if (!fetch_file(tag, name, APPS_DIR "/" PART_NAME, path, want))
+		return false;
+	prune_firmware(name);
+	return true;
+}
+
+/* the archive is staged in the transfer directory so that it is checked
+   whole before anything under Z80 is touched; it stays there on failure */
+static bool sd_files(const char *tag)
+{
+	char name[NAME_LEN + 1], path[sizeof(XFER_DIR) + NAME_LEN];
+	uint8_t want[SHA256_LEN];
+	const char *err;
+	FRESULT fr;
+
+	snprintf(name, sizeof(name), SD_PREFIX TAG_FMT ".tar.gz", tag);
+	if (!sum_of(name, want)) {
+		printf("The release has no %s\n", name);
+		return false;
+	}
+	fr = f_mkdir(XFER_DIR);
+	if (fr != FR_OK && fr != FR_EXIST) {
+		puts("Cannot create " XFER_DIR);
+		return false;
+	}
+	snprintf(path, sizeof(path), XFER_DIR "%s", name);
+	if (!fetch_file(tag, name, XFER_DIR PART_NAME, path, want))
+		return false;
+	puts("Extracting...");
+	err = untar_gz(path, bnk1);
+	if (err) {
+		printf("Extraction failed: %s\n"
+		       "The archive is kept as %s\n", err, path);
+		return false;
+	}
+	f_unlink(path);
+	puts("SD card files updated");
+	return true;
+}
+
+bool update_run(const char *tag)
+{
+	char fw[sizeof(APPS_DIR) + NAME_LEN + 1];
+	bool ok;
 
 	if (!sd_mounted) {
 		puts("No SD card\n");
 		return false;
 	}
 	update_begin();
-	if (!fetch_sums(tag)) {
+	if (!fetch_sums(tag) || !firmware(tag, fw, sizeof(fw))) {
 		putchar('\n');
 		return false;
 	}
-	snprintf(name, sizeof(name), FW_PREFIX TAG_FMT ".uf2", tag);
-	if (!sum_of(name, want)) {
-		printf("The release has no %s\n\n", name);
-		return false;
-	}
-	fr = f_mkdir(APPS_DIR);
-	if (fr != FR_OK && fr != FR_EXIST) {
-		puts("Cannot create " APPS_DIR "\n");
-		return false;
-	}
-	snprintf(path, sizeof(path), APPS_DIR "/%s", name);
-	if (!fetch_file(tag, name, path, want)) {
-		putchar('\n');
-		return false;
-	}
-	prune_firmware(name);
+	ok = sd_files(tag);
+	/* the firmware is good whatever happened to the card files */
 	printf("\nFirmware saved as %s\n"
 	       "Power on holding the Up Arrow and choose it in the loader.\n\n",
-	       path);
-	return true;
+	       fw);
+	return ok;
 }

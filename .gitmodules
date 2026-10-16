@@ -5,3 +5,6 @@
 [submodule "submodules/pico_fatfs"]
 	path = submodules/pico_fatfs
 	url = https://github.com/elehobica/pico_fatfs.git
+[submodule "submodules/uzlib"]
+	path = submodules/uzlib
+	url = https://github.com/pfalcon/uzlib.git
