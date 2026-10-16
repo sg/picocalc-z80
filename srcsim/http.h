@@ -18,11 +18,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if PICOCALC_SMALL_RAM
-#define HTTP_RING_SIZE	4096	/* a power of two; the Pico W has 8 pbufs */
-#else
+/* a power of two; it comes out of the machine's idle memory on every board,
+   and the bigger it is the longer a slow SD write can go before TCP has to
+   hold the sender back */
 #define HTTP_RING_SIZE	16384
-#endif
 #define HTTP_HDR_SIZE	8192	/* GitHub's replies carry 5 KB of headers */
 #define HTTP_URL_MAX	2048	/* its signed asset redirects run to 1 KB */
 #define HTTP_REQ_SIZE	(HTTP_URL_MAX + 256)
