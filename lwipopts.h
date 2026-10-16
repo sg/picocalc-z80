@@ -1,6 +1,7 @@
 /*
- * lwIP options for picocalc-z80, from picocalc_lua's with TLS removed.
- * Buffers are sized for one modem connection plus DHCP, DNS and NTP.
+ * lwIP options for picocalc-z80, from picocalc_lua's. Buffers are sized for
+ * one modem connection plus DHCP, DNS and NTP, and on the RP2350 boards for
+ * the update client's TLS as well.
  */
 #ifndef _LWIPOPTS_H
 #define _LWIPOPTS_H
@@ -14,13 +15,24 @@
 /* memory */
 #define MEM_LIBC_MALLOC             0
 #define MEM_ALIGNMENT               4
-#define MEM_SIZE                    8192
 #define MEMP_NUM_TCP_SEG            32
 #define MEMP_NUM_ARP_QUEUE          10
 #if PICOCALC_SMALL_RAM
+#define MEM_SIZE                    8192
 #define PBUF_POOL_SIZE              8	/* RP2040: 12 KB less, slower downloads */
+#define TCP_WND                     (4 * TCP_MSS)
+#elif PICOCALC_TLS
+/* a 16 KB TLS record has to fit the window before it can be decrypted, and
+   the pool holds the decrypted copy as well while the reader catches up;
+   the heap also serves mbedtls (see mbedtls_config.h), whose session peaks
+   around 40 KB with its 16 KB record buffer and the server's certificates */
+#define MEM_SIZE                    65536
+#define PBUF_POOL_SIZE              32
+#define TCP_WND                     (12 * TCP_MSS)
 #else
+#define MEM_SIZE                    8192
 #define PBUF_POOL_SIZE              16
+#define TCP_WND                     (4 * TCP_MSS)
 #endif
 #define MEMP_NUM_TCP_PCB            8
 #define MEMP_NUM_TCP_PCB_LISTEN     4
@@ -38,8 +50,13 @@
 #define LWIP_DHCP                   1
 #define LWIP_TCP_KEEPALIVE          1
 #define LWIP_ALTCP                  1	/* the HTTP client, so TLS can slot in */
+#if PICOCALC_TLS
+#define LWIP_ALTCP_TLS              1
+#define LWIP_ALTCP_TLS_MBEDTLS      1
+/* MBEDTLS_SSL_VERIFY_NONE: no CA store yet, the SHA-256 sums cover integrity */
+#define ALTCP_MBEDTLS_AUTHMODE      0
+#endif
 #define TCP_MSS                     1460
-#define TCP_WND                     (4 * TCP_MSS)
 #define TCP_SND_BUF                 (2 * TCP_MSS)
 #define TCP_SND_QUEUELEN            ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
 #define LWIP_NETIF_STATUS_CALLBACK  1

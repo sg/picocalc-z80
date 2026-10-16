@@ -497,7 +497,11 @@ static void update_check(void)
 		printf("failed: %s\n\n", err);
 		return;
 	}
-	printf("latest release is %s\n\n", tag);
+	printf("latest release is %s\n", tag);
+#ifdef PICOCALC_STACK_WATERMARK
+	printf("core 0 stack headroom: %u bytes\n", stack_headroom());
+#endif
+	putchar('\n');
 	if (version_cmp(tag, USR_REL) <= 0 &&
 	    (!have_card || version_cmp(tag, card) <= 0)) {
 		puts("Already up to date\n");

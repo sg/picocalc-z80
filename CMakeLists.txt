@@ -77,7 +77,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-	PICO_STACK_SIZE=4096
 	# RP2350 has no calendar RTC block, but srcsim/rtc_compat.c still wants
 	# the datetime_t type that pico-sdk only defines by default on RP2040
 	PICO_INCLUDE_RTC_DATETIME=1
@@ -229,7 +228,35 @@ if(PICOCALC_WIFI)
 			PICOCALC_SMALL_RAM=1
 			PICO_HEAP_SIZE=16384
 		)
+		set(PICOCALC_TLS OFF)
+	else()
+		# HTTPS for the update client: mbedtls under lwIP's altcp, with
+		# mbedtls_config.h from the project root; too big for the Pico W
+		option(PICOCALC_TLS "HTTPS in the update client" ON)
 	endif()
+	if(PICOCALC_TLS)
+		target_compile_definitions(${PROJECT_NAME} PRIVATE PICOCALC_TLS=1)
+		target_link_libraries(${PROJECT_NAME} pico_lwip_mbedtls pico_mbedtls)
+	endif()
+endif()
+# core 0's stack: the TLS handshake runs on it, inside lwIP's callbacks, and
+# was measured at 2.5 KB with everything else on the core, too close to the
+# SDK's 4 KB scratch bank, so rp2350_memmap.ld moves the stack into main RAM
+if(PICOCALC_TLS)
+	# core 1 runs on picosim.c's own stack; the SDK's default one only has
+	# to fit its scratch bank
+	target_compile_definitions(${PROJECT_NAME} PRIVATE
+		PICO_STACK_SIZE=16384
+		PICO_CORE1_STACK_SIZE=4096)
+	pico_set_linker_script(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/rp2350_memmap.ld)
+else()
+	target_compile_definitions(${PROJECT_NAME} PRIVATE PICO_STACK_SIZE=4096)
+endif()
+# paints core 0's stack at boot and reports the untouched part after an
+# update check, to size PICO_STACK_SIZE
+option(PICOCALC_STACK_WATERMARK "report core 0 stack headroom in the update menu" OFF)
+if(PICOCALC_STACK_WATERMARK)
+	target_compile_definitions(${PROJECT_NAME} PRIVATE PICOCALC_STACK_WATERMARK=1)
 endif()
 if(NOT PICOCALC_WIFI OR NOT PICO_PLATFORM STREQUAL "rp2040")
 	target_compile_definitions(${PROJECT_NAME} PRIVATE PICO_HEAP_SIZE=32768)

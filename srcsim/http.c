@@ -19,6 +19,11 @@
 #include "lwip/tcp.h"
 #include "lwip/altcp.h"
 #include "lwip/altcp_tcp.h"
+#ifdef PICOCALC_TLS
+#include "lwip/altcp_tls.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/platform_time.h"
+#endif
 
 #include "sim.h"
 #include "crash.h"
@@ -60,6 +65,9 @@ volatile bool http_active;
 
 /* core 0 only */
 static struct altcp_pcb *pcb;
+#ifdef PICOCALC_TLS
+static struct altcp_tls_config *tls_conf;	/* made once, kept */
+#endif
 static struct pbuf *pending;
 static uint16_t pending_off;
 static ip_addr_t addr;
@@ -172,9 +180,45 @@ static void on_dns(const char *name, const ip_addr_t *ip, void *arg)
 	dns_done = true;
 }
 
+static err_t on_poll(void *arg, struct altcp_pcb *c)
+{
+	(void) arg;
+	(void) c;
+	return ERR_OK;
+}
+
+#ifdef PICOCALC_TLS
+/* mbedtls asks for this with MBEDTLS_PLATFORM_MS_TIME_ALT */
+mbedtls_ms_time_t mbedtls_ms_time(void)
+{
+	return to_ms_since_boot(get_absolute_time());
+}
+
+static struct altcp_pcb *new_tls_pcb(void)
+{
+	struct altcp_pcb *c;
+	ip_addr_t literal;
+
+	if (!tls_conf)
+		tls_conf = altcp_tls_create_config_client(NULL, 0);
+	if (!tls_conf)
+		return NULL;
+	c = altcp_tls_new(tls_conf, IP_GET_TYPE(&addr));
+	/* SNI, which GitHub's asset host insists on; not for a bare address */
+	if (c && !ipaddr_aton(req_host, &literal))
+		mbedtls_ssl_set_hostname(altcp_tls_context(c), req_host);
+	return c;
+}
+#endif
+
 static void start_connect(void)
 {
-	pcb = altcp_tcp_new_ip_type(IP_GET_TYPE(&addr));
+#ifdef PICOCALC_TLS
+	if (req_tls)
+		pcb = new_tls_pcb();
+	else
+#endif
+		pcb = altcp_tcp_new_ip_type(IP_GET_TYPE(&addr));
 	if (!pcb) {
 		fail("out of memory");
 		return;
@@ -182,6 +226,9 @@ static void start_connect(void)
 	altcp_arg(pcb, NULL);
 	altcp_recv(pcb, on_recv);
 	altcp_err(pcb, on_err);
+	/* the TLS layer only retries a decryption it had to put off, for want
+	   of a pbuf, from the poll it is given */
+	altcp_poll(pcb, on_poll, 2);
 	state = HS_CONNECTING;
 	if (altcp_connect(pcb, &addr, req_port, on_connected) != ERR_OK) {
 		detach(pcb);
@@ -386,7 +433,7 @@ static bool send_request(const url_t *u, const char **err)
 	req_len = n;
 #ifndef PICOCALC_TLS
 	if (u->tls) {
-		*err = "https is not supported on this board";
+		*err = "HTTPS needs a Pico 2 board, use an http:// URL here";
 		return false;
 	}
 #endif

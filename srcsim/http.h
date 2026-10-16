@@ -23,8 +23,8 @@
 #else
 #define HTTP_RING_SIZE	16384
 #endif
-#define HTTP_HDR_SIZE	2048	/* the reply headers, then the body buffer */
-#define HTTP_URL_MAX	1024	/* GitHub's signed redirects are long */
+#define HTTP_HDR_SIZE	8192	/* GitHub's replies carry 5 KB of headers */
+#define HTTP_URL_MAX	2048	/* its signed asset redirects run to 1 KB */
 #define HTTP_REQ_SIZE	(HTTP_URL_MAX + 256)
 #define HTTP_WORK_SIZE	(HTTP_RING_SIZE + HTTP_HDR_SIZE + HTTP_URL_MAX + \
 			 HTTP_REQ_SIZE)

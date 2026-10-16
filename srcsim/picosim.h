@@ -9,4 +9,8 @@
 
 extern int speed;
 
+#ifdef PICOCALC_STACK_WATERMARK
+extern unsigned stack_headroom(void);	/* core 0 stack never touched, bytes */
+#endif
+
 #endif /* !PICOSIM_INC */

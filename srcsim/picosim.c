@@ -117,8 +117,34 @@ static void break_key(void)
  * installs. So core 0 sets the hardware up and then just stays available,
  * and the machine itself gets core 1.
  */
+#ifdef PICOCALC_STACK_WATERMARK
+extern char __StackBottom;
+
+/* fill the stack below this frame with a pattern, once, at boot */
+static void __attribute__((noinline)) stack_paint(void)
+{
+	char here, *p = &__StackBottom;
+	char *top = (char *) ((uintptr_t) &here - 256);
+
+	while (p < top)
+		*p++ = 0x5a;
+}
+
+unsigned stack_headroom(void)
+{
+	char *p = &__StackBottom;
+
+	while (*p == 0x5a)
+		p++;
+	return p - &__StackBottom;
+}
+#endif
+
 int main(void)
 {
+#ifdef PICOCALC_STACK_WATERMARK
+	stack_paint();
+#endif
 	lcd_init();
 	keyboard_init();
 	keymap_init();
