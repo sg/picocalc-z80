@@ -11,17 +11,22 @@ taken from Pico-Eval-Board-80/srccpm2/bios.asm. Parameters come from its DPB:
 1K blocks, 64 directory entries in blocks 0 and 1, two reserved tracks.
 
     cpmdisk.py list    disk.dsk [-u N]
-    cpmdisk.py get     disk.dsk [N:]NAME.EXT [outfile] [-u N]
+    cpmdisk.py get     disk.dsk [N:]NAME [NAME ...] [-o DIR] [-u N]
     cpmdisk.py put     disk.dsk file [file ...] [-u N]
     cpmdisk.py era     disk.dsk [N:]NAME.EXT [...] [-u N]
     cpmdisk.py mkhd    disk.hdd            create a blank 4 MB hard disk
     cpmdisk.py sysgen  disk.dsk boot.bin cpm.bin bios.bin
 
+get takes names or shell-style patterns, *.COM or R?.COM, matched against the
+directory - quote them so the shell leaves them alone - and writes the files
+under their disk names into the current directory, or into -o DIR, which it
+creates if need be.
+
 Files live in one of 16 user areas, which CP/M keeps in the first byte of the
-directory entry. Everything defaults to user 0; -u picks another, and get also
-accepts the ZCPR spelling, 3:NAME.EXT. list shows every area unless told which
-one. Blocks are allocated disk-wide rather than per area, so a file in one area
-still consumes free space seen by all of them.
+directory entry. Everything defaults to user 0; -u picks another, and get and
+era also accept the ZCPR spelling, 3:NAME.EXT. list shows every area unless
+told which one. Blocks are allocated disk-wide rather than per area, so a file
+in one area still consumes free space seen by all of them.
 
 The format is chosen by file size: 256256 bytes is the floppy above, 4194304 is
 the hard disk drive I:. That one has no skew and no reserved tracks, 2048 byte
@@ -29,6 +34,7 @@ blocks and 512 directory entries, so its block pointers are 16 bit - see the
 disk parameter block in cpm/bios.asm.
 """
 
+import fnmatch
 import os
 import sys
 
@@ -220,33 +226,68 @@ def cmd_list(path, user=None):
                   % ", ".join(str(a) for a in areas))
 
 
-def cmd_get(path, name, out=None, user=0):
-    img = bytearray(open(path, 'rb').read())
-    fmt = format_for(img)
-    live, _ = scan(img, fmt)
-    name, user = split_user(name, user)
-    check_user(user)
-    want = name.upper()
-    exts = sorted((e[12] | (e[14] << 5), e) for i, e in live
-                  if entry_name(e) == want and e[0] == user)
-    if not exts:
-        elsewhere = sorted({e[0] for _, e in live if entry_name(e) == want})
-        if elsewhere:
-            raise SystemExit("%s: not in user %d, but is in user %s"
-                             % (want, user,
-                                ", ".join(str(u) for u in elsewhere)))
-        raise SystemExit("%s: not on the disk" % name)
+def disk_files(live):
+    """The files on the disk, {(user, NAME): entries in extent order}."""
+    files = {}
+    for _, e in live:
+        files.setdefault((e[0], entry_name(e)), []).append(e)
+    for exts in files.values():
+        exts.sort(key=lambda e: e[12] | (e[14] << 5))
+    return files
+
+
+def file_data(img, fmt, exts):
     data = bytearray()
-    for _, e in exts:
+    for e in exts:
         rc = e[15]
         for n, blk in enumerate(entry_blocks(e, fmt)):
             for s in range(fmt.spb):
                 if n * fmt.spb + s >= rc:
                     break
                 data += read_rec(img, fmt, blk * fmt.spb + s)
-    out = out or want
-    open(out, 'wb').write(data)
-    print("%d:%s -> %s, %d bytes" % (user, want, out, len(data)))
+    return data
+
+
+def match_files(files, names, user):
+    """
+    The (user, NAME) keys the names pick out, each once, in name order.
+
+    A name may be a shell-style pattern. A plain name that is not in the area
+    says where else it is, since that is the usual mistake with user areas.
+    """
+    picked = []
+    for name in names:
+        pat, u = split_user(name, user)
+        check_user(u)
+        pat = pat.upper()
+        hits = sorted(k for k in files
+                      if k[0] == u and fnmatch.fnmatchcase(k[1], pat))
+        if not hits:
+            elsewhere = sorted({k[0] for k in files
+                                if fnmatch.fnmatchcase(k[1], pat)})
+            if elsewhere:
+                raise SystemExit("%s: not in user %d, but is in user %s"
+                                 % (pat, u, ", ".join(str(a) for a in elsewhere)))
+            if any(c in pat for c in '*?['):
+                raise SystemExit("%s: nothing on the disk matches" % pat)
+            raise SystemExit("%s: not on the disk" % pat)
+        picked.extend(k for k in hits if k not in picked)
+    return picked
+
+
+def cmd_get(path, names, outdir=None, user=0):
+    img = bytearray(open(path, 'rb').read())
+    fmt = format_for(img)
+    live, _ = scan(img, fmt)
+    files = disk_files(live)
+    picked = match_files(files, names, user)
+    if outdir:
+        os.makedirs(outdir, exist_ok=True)
+    for u, name in picked:
+        data = file_data(img, fmt, files[(u, name)])
+        out = os.path.join(outdir, name) if outdir else name
+        open(out, 'wb').write(data)
+        print("%d:%s -> %s, %d bytes" % (u, name, out, len(data)))
 
 
 def make_name(fname):
@@ -378,35 +419,43 @@ def cmd_sysgen(path, boot, cpm, bios):
              len(blob), sysbytes, (len(blob) + SECLEN - 1) // SECLEN))
 
 
-def take_user(args):
-    """Pull -u N out of the argument list, returning it and the remainder."""
-    user = None
+def take_option(args, flag):
+    """Pull 'flag VALUE' out of the argument list, returning VALUE and the rest."""
+    value = None
     out = []
     i = 0
     while i < len(args):
-        if args[i] == '-u':
-            if i + 1 >= len(args) or not args[i + 1].isdigit():
-                raise SystemExit("-u needs a user area, 0 to 15")
-            user = check_user(int(args[i + 1]))
+        if args[i] == flag:
+            if i + 1 >= len(args):
+                raise SystemExit("%s needs a value" % flag)
+            value = args[i + 1]
             i += 2
         else:
             out.append(args[i])
             i += 1
-    return user, out
+    return value, out
 
 
 def main(argv):
     if len(argv) < 3:
         raise SystemExit(__doc__.strip())
-    user, args = take_user(argv[1:])
+    user, args = take_option(argv[1:], '-u')
+    if user is not None:
+        if not user.isdigit():
+            raise SystemExit("-u needs a user area, 0 to 15")
+        user = check_user(int(user))
+    outdir, args = take_option(args, '-o')
+    if len(args) < 2:
+        raise SystemExit(__doc__.strip())
     cmd, path, rest = args[0], args[1], args[2:]
+    if outdir is not None and cmd != 'get':
+        raise SystemExit("only get takes -o")
     if cmd == 'list':
         cmd_list(path, user)
     elif cmd == 'get':
         if not rest:
-            raise SystemExit("get needs a file name")
-        cmd_get(path, rest[0], rest[1] if len(rest) > 1 else None,
-                0 if user is None else user)
+            raise SystemExit("get needs at least one file name or pattern")
+        cmd_get(path, rest, outdir, 0 if user is None else user)
     elif cmd == 'put':
         if not rest:
             raise SystemExit("put needs at least one file")

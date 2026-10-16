@@ -17,10 +17,8 @@ CPMDISK="python3 $HERE/cpmdisk.py"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-for f in KERMIT.COM KERMIT3.COM QT-IMSAI.COM QT-IMSAI.ASM QTERM.DOC \
-         QTCHAT.DOC QTERM.PAT XMODEM.COM; do
-    $CPMDISK get "$SRC" "$f" "$tmp/$f" >/dev/null
-done
+$CPMDISK get "$SRC" KERMIT.COM KERMIT3.COM QT-IMSAI.COM QT-IMSAI.ASM QTERM.DOC \
+    QTCHAT.DOC QTERM.PAT XMODEM.COM -o "$tmp" >/dev/null
 
 python3 - "$tmp/QT-IMSAI.COM" "$tmp/QT.COM" <<'PY'
 import sys
