@@ -60,6 +60,11 @@ extern void list_files(const char *dir, const char *ext);
 extern bool load_file(const char *name);
 extern void check_disks(void);
 extern void mount_disk(int drive, const char *name);
+/* put image name, a stem with no directory or extension, in a slot; false
+   with *err set when it is not on the card or is in another drive */
+extern bool mount_image(int slot, const char *name, const char **err);
+extern void eject_disk(int slot);
+extern char drive_letter(int slot);
 
 extern BYTE read_sec(int drive, int track, int sector, WORD addr);
 extern BYTE write_sec(int drive, int track, int sector, WORD addr);

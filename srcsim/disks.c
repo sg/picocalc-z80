@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>
 
 #include "pico/stdlib.h"
@@ -264,33 +265,62 @@ void check_disks(void)
 /*
  * mount a disk image 'name' on disk 'drive'
  */
-void mount_disk(int drive, const char *name)
+char drive_letter(int slot)
 {
+	return (slot == HD_SLOT) ? 'I' : 'A' + slot;
+}
+
+bool mount_image(int slot, const char *name, const char **err)
+{
+	static char taken[24];
 	char SFN[DISKLEN+1];
 	int i;
 
+	if (strlen(name) > FNLEN) {
+		*err = "Name too long";
+		return false;
+	}
 	strcpy(SFN, DISKS_DIR);
 	strcat(SFN, name);
-	strcat(SFN, (drive == HD_SLOT) ? ".HDD" : ".DSK");
+	strcat(SFN, (slot == HD_SLOT) ? ".HDD" : ".DSK");
 
+	/* FatFs matches names without regard to case, so this has to as well */
 	for (i = 0; i < NUMDRV; i++) {
-		if (i != drive && strcmp(disks[i], SFN) == 0) {
-			puts("Disk already mounted\n");
-			return;
+		if (i != slot && strcasecmp(disks[i], SFN) == 0) {
+			snprintf(taken, sizeof(taken), "Already in drive %c:",
+				 drive_letter(i));
+			*err = taken;
+			return false;
 		}
 	}
 
-	/* try to open file */
 	sd_res = f_open(&sd_file, SFN, FA_READ);
 	if (sd_res != FR_OK) {
-		puts("File not found\n");
-		return;
+		*err = "File not found";
+		return false;
 	}
-
 	f_close(&sd_file);
-	close_disk(drive);
-	strcpy(disks[drive], SFN);
-	putchar('\n');
+
+	/* a swap while the machine runs has to let go of the old image */
+	close_disk(slot);
+	strcpy(disks[slot], SFN);
+	return true;
+}
+
+void eject_disk(int slot)
+{
+	close_disk(slot);
+	disks[slot][0] = '\0';
+}
+
+void mount_disk(int drive, const char *name)
+{
+	const char *err;
+
+	if (!mount_image(drive, name, &err))
+		printf("%s\n\n", err);
+	else
+		putchar('\n');
 }
 
 /*

@@ -848,7 +848,7 @@ again:
 			if (s[0])
 				mount_disk(i, s);
 			else {
-				disks[i][0] = '\0';
+				eject_disk(i);
 				putchar('\n');
 			}
 			break;

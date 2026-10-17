@@ -39,6 +39,8 @@ extern void scrollback_clear(void);
 /* true while the view is off the bottom, so the machine must wait */
 extern bool scrollback_active(void);
 extern int scrollback_offset(void);
+/* back to the live screen, for something that is about to draw on it */
+extern void scrollback_leave(void);
 
 /* returns true if the event was a navigation key and has been consumed */
 extern bool scrollback_key(const input_event_t *ev);

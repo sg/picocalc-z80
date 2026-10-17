@@ -121,7 +121,8 @@ static volatile bool drive_menu_pending;
 
 static void chord_key(unsigned char code)
 {
-	if (tolower(code) == 'd') {
+	/* the Dazzler's screen is not text, so there is nothing to put back */
+	if (tolower(code) == 'd' && !dazzler_state) {
 		drive_menu_pending = true;
 		cpu_state = ST_STOPPED;
 	}

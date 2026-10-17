@@ -211,6 +211,15 @@ bool scrollback_key(const input_event_t *ev)
 	return false;
 }
 
+void scrollback_leave(void)
+{
+	if (offset != 0) {
+		offset = 0;
+		repaint();
+		term_hold_cursor(false);
+	}
+}
+
 bool scrollback_active(void)
 {
 	return enabled && (offset != 0);
