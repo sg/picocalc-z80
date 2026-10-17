@@ -181,6 +181,30 @@ bool wifi_clock_synced(void)
 	return clock_synced;
 }
 
+void wifi_status_text(char *buf, size_t len)
+{
+	char ip[16];
+
+	switch (state) {
+	case WIFI_OFF:
+		snprintf(buf, len, "off");
+		break;
+	case WIFI_IDLE:
+		snprintf(buf, len, "not connected");
+		break;
+	case WIFI_JOINING:
+		snprintf(buf, len, "connecting to %s", cur_ssid);
+		break;
+	case WIFI_UP:
+		wifi_get_ip(ip, sizeof(ip));
+		snprintf(buf, len, "%s %s %ddBm", cur_ssid, ip, rssi);
+		break;
+	case WIFI_FAILED:
+		snprintf(buf, len, "%s: %s", cur_ssid, fail_reason);
+		break;
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /* core 0 side                                                         */
 

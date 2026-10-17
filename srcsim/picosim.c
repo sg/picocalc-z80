@@ -33,6 +33,9 @@
 
 #include "crash.h"
 #include "drivemenu.h"
+#ifdef PICOCALC_WIFI
+#include "wifimenu.h"
+#endif
 
 #include "ff.h"
 
@@ -113,19 +116,33 @@ static void break_key(void)
 }
 
 /*
- * Ctrl+Alt+D, from the keyboard timer on core 0: stop the CPU loop with no
- * error set, so that z80_main() runs the drive menu on core 1 and then starts
+ * Ctrl+Alt+D or W, from the keyboard timer on core 0: stop the CPU loop with
+ * no error set, so that z80_main() runs the menu on core 1 and then starts
  * the loop again where it left off.
  */
-static volatile bool drive_menu_pending;
+enum { MENU_NONE, MENU_DRIVES, MENU_WIFI };
+
+static volatile int menu_pending;
 
 static void chord_key(unsigned char code)
 {
-	/* the Dazzler's screen is not text, so there is nothing to put back */
-	if (tolower(code) == 'd' && !dazzler_state) {
-		drive_menu_pending = true;
-		cpu_state = ST_STOPPED;
+	int menu = MENU_NONE;
+
+	switch (tolower(code)) {
+	case 'd':
+		menu = MENU_DRIVES;
+		break;
+#ifdef PICOCALC_WIFI
+	case 'w':
+		menu = MENU_WIFI;
+		break;
+#endif
 	}
+	/* the Dazzler's screen is not text, so there is nothing to put back */
+	if (menu == MENU_NONE || dazzler_state)
+		return;
+	menu_pending = menu;
+	cpu_state = ST_STOPPED;
 }
 
 /*
@@ -283,11 +300,16 @@ static void z80_main(void)
 	ice_cmd_loop(0);
 #else
 	for (;;) {
-		drive_menu_pending = false;
+		menu_pending = MENU_NONE;
 		run_cpu();
-		if (!drive_menu_pending || cpu_error != NONE)
+		if (menu_pending == MENU_NONE || cpu_error != NONE)
 			break;
-		drive_menu();
+		if (menu_pending == MENU_DRIVES)
+			drive_menu();
+#ifdef PICOCALC_WIFI
+		else
+			wifi_menu();
+#endif
 	}
 #endif
 

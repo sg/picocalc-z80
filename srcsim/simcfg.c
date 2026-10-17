@@ -237,32 +237,6 @@ void save_config(void)
 /*
  * one line summary of the WiFi state, for both menus
  */
-static void net_status(char *buf, size_t len)
-{
-	char ip[16];
-
-	switch (wifi_get_state()) {
-	case WIFI_OFF:
-		snprintf(buf, len, "off");
-		break;
-	case WIFI_IDLE:
-		snprintf(buf, len, "not connected");
-		break;
-	case WIFI_JOINING:
-		snprintf(buf, len, "connecting to %s", wifi_get_ssid());
-		break;
-	case WIFI_UP:
-		wifi_get_ip(ip, sizeof(ip));
-		snprintf(buf, len, "%s %s %ddBm", wifi_get_ssid(), ip,
-			 wifi_get_rssi());
-		break;
-	case WIFI_FAILED:
-		snprintf(buf, len, "%s: %s", wifi_get_ssid(),
-			 wifi_fail_reason());
-		break;
-	}
-}
-
 static void net_start(void)
 {
 	if (wifi_get_state() == WIFI_OFF) {
@@ -335,7 +309,7 @@ static void net_config(void)
 	int i;
 
 	while (!quit) {
-		net_status(s, sizeof(s));
+		wifi_status_text(s, sizeof(s));
 		printf(SGR_LABEL "Network:" SGR_OFF " %s\n\n", s);
 		menu_item("S", "Scan for networks", NULL);
 		if (wifi_scan_count()) {
@@ -670,7 +644,7 @@ void config(void)
 			       "%02d:%02d:%02d\n", dotw[t.dotw],
 			       t.year, t.month, t.day, t.hour, t.min, t.sec);
 #ifdef PICOCALC_WIFI
-			net_status(s_net, sizeof(s_net));
+			wifi_status_text(s_net, sizeof(s_net));
 			menu_item("N", "Network:", "%s", s_net);
 			menu_item("U", "Update PicoCalc-Z80", NULL);
 #endif

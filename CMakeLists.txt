@@ -42,6 +42,7 @@ add_executable(${PROJECT_NAME}
 	srcsim/status.c
 	srcsim/crash.c
 	srcsim/scrollback.c
+	srcsim/overlay.c
 	srcsim/drivemenu.c
 	srcsim/dazzler.c
 	srcsim/hostbdos.c
@@ -203,6 +204,7 @@ if(PICOCALC_WIFI)
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/netsock.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/modem.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/http.c
+		${CMAKE_CURRENT_LIST_DIR}/srcsim/wifimenu.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/update.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/sha256.c
 		${CMAKE_CURRENT_LIST_DIR}/srcsim/version.c

@@ -60,5 +60,7 @@ extern bool wifi_scan_busy(void);
 extern int wifi_scan_count(void);
 extern const wifi_scan_result_t *wifi_scan_result(int i);
 extern bool wifi_clock_synced(void);
+/* the state in a few words, with the network and address when joined */
+extern void wifi_status_text(char *buf, size_t len);
 
 #endif /* !WIFI_INC */
