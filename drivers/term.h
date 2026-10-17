@@ -48,5 +48,16 @@ bool term_get_blinking_cursor();
 void term_set_blinking_cursor(bool enabled);
 /* keep the cursor off the screen while something else owns it, leaving the program's setting alone */
 void term_hold_cursor(bool hold);
+/*
+ * An overlay is a box drawn over the text, in screen cells, for something
+ * that is not the machine's output. It paints the panel directly and leaves
+ * the shadow alone, so closing it repaints the box from the shadow and the
+ * text underneath comes back as it was. The caller keeps the machine quiet
+ * while it is open; fills and text outside the box are clipped away.
+ */
+void term_overlay_open(int col, int row, int cols, int rows);
+void term_overlay_fill(int col, int row, int cols, int rows, u16 bg);
+void term_overlay_text(int col, int row, u16 fg, u16 bg, const char *s);
+void term_overlay_close(void);
 void term_blit(const char* text, const char* fg, const char* bg);
 int term_readline(const char* prompt, char* buffer, int max_length, history_t* history);

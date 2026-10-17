@@ -303,6 +303,58 @@ void term_hold_cursor(bool hold) {
 	else draw_cursor();
 }
 
+/*
+ * The overlay box, see term.h. Rows are screen rows here and ring rows in the
+ * paint calls, so the box stays put whatever the scroll position is.
+ */
+static struct { bool open; int col, row, cols, rows; } overlay;
+
+void term_overlay_open(int col, int row, int cols, int rows) {
+	if (col < 0) { cols += col; col = 0; }
+	if (row < 0) { rows += row; row = 0; }
+	if (col + cols > font.term_width) cols = font.term_width - col;
+	if (row + rows > font.term_height) rows = font.term_height - row;
+	overlay.col = col;
+	overlay.row = row;
+	overlay.cols = cols > 0 ? cols : 0;
+	overlay.rows = rows > 0 ? rows : 0;
+	overlay.open = true;
+	term_hold_cursor(true);
+}
+
+void term_overlay_fill(int col, int row, int cols, int rows, u16 bg) {
+	int c0 = col > overlay.col ? col : overlay.col;
+	int r0 = row > overlay.row ? row : overlay.row;
+	int c1 = col + cols < overlay.col + overlay.cols ? col + cols : overlay.col + overlay.cols;
+	int r1 = row + rows < overlay.row + overlay.rows ? row + rows : overlay.row + overlay.rows;
+	if (!overlay.open || c1 <= c0 || r1 <= r0) return;
+	for (int r = r0; r < r1; r++)
+		paint_fill(c0, ansi.scroll + r, (c1 - c0) * font.glyph_width, bg);
+}
+
+void term_overlay_text(int col, int row, u16 fg, u16 bg, const char *s) {
+	int n = strlen(s);
+	int c0 = col > overlay.col ? col : overlay.col;
+	int c1 = col + n < overlay.col + overlay.cols ? col + n : overlay.col + overlay.cols;
+	if (!overlay.open || row < overlay.row || row >= overlay.row + overlay.rows) return;
+	for (int c = c0; c < c1; c++)
+		paint_char(c, ansi.scroll + row, fg, bg, s[c - col]);
+}
+
+void term_overlay_close(void) {
+	if (!overlay.open) return;
+	for (int r = overlay.row; r < overlay.row + overlay.rows; r++) {
+		int ring = ansi.scroll + r;
+		for (int c = overlay.col; c < overlay.col + overlay.cols; c++) {
+			cell_t *cell = cell_at(c, ring);
+			if (cell) paint_char(c, ring, colors[cell->fg], colors[cell->bg], cell->c);
+			else paint_fill(c, ring, font.glyph_width, ansi.bg);
+		}
+	}
+	overlay.open = false;
+	term_hold_cursor(false);
+}
+
 static bool on_cursor_timer(repeating_timer_t *rt) {
 	if (!ansi.cursor_manual && ansi.cursor_visible) {
 		erase_cursor();

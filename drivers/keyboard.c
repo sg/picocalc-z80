@@ -48,6 +48,7 @@ queue_t key_fifo;
 
 keyboard_callback_t key_available_callback = NULL;
 keyboard_callback_t interrupt_callback = NULL;
+static keyboard_chord_callback_t chord_callback = NULL;
 
 static int keyboard_modifiers;
 
@@ -119,6 +120,8 @@ static void keyboard_check_special_keys(unsigned char state, unsigned char code)
 				printf("rebooting via watchdog\n");
 				watchdog_reboot(0, 0, 0);
 				watchdog_enable(0, 1);
+			} else if (chord_callback && code != KEY_CONTROL && code != KEY_ALT) {
+				chord_callback(code);
 			}
 		} else {
 			if (interrupt_callback && code == KEY_BREAK) {
@@ -140,6 +143,9 @@ static bool on_keyboard_timer(repeating_timer_t *rt) {
 	} else if (state == KEY_STATE_RELEASED) {
 		keystates[code] = KEY_STATE_IDLE;
 	}
+	// a Ctrl+Alt chord is for the machine itself, so whatever runs on it must not see the key typed
+	if (keyboard_modifiers == (MOD_CONTROL|MOD_ALT) && code != KEY_CONTROL && code != KEY_ALT
+	    && state != KEY_STATE_RELEASED) return true;
 	input_event_t event = {state, keyboard_modifiers, code};
 	queue_try_add(&key_fifo, &event);
 	if (key_available_callback) key_available_callback();
@@ -152,6 +158,10 @@ void keyboard_set_key_available_callback(keyboard_callback_t callback) {
 
 void keyboard_set_interrupt_callback(keyboard_callback_t callback) {
 	interrupt_callback = callback;
+}
+
+void keyboard_set_chord_callback(keyboard_chord_callback_t callback) {
+	chord_callback = callback;
 }
 
 bool keyboard_key_available() {

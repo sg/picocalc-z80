@@ -174,12 +174,15 @@ typedef struct {
 } input_event_t;
 
 typedef void (*keyboard_callback_t)(void);
+/* a Ctrl+Alt chord the driver does not act on itself, by the key's code */
+typedef void (*keyboard_chord_callback_t)(unsigned char code);
 
 int keyboard_init();
 input_event_t keyboard_poll(bool peek);
 input_event_t keyboard_wait_ex(bool nomod, bool onlypressed);
 void keyboard_set_key_available_callback(keyboard_callback_t callback);
 void keyboard_set_interrupt_callback(keyboard_callback_t callback);
+void keyboard_set_chord_callback(keyboard_chord_callback_t callback);
 unsigned char keyboard_getstate(unsigned char code);
 bool keyboard_key_available();
 void keyboard_flush();

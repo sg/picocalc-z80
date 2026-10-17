@@ -32,6 +32,7 @@
 #include "hardware/watchdog.h"
 
 #include "crash.h"
+#include "drivemenu.h"
 
 #include "ff.h"
 
@@ -112,6 +113,21 @@ static void break_key(void)
 }
 
 /*
+ * Ctrl+Alt+D, from the keyboard timer on core 0: stop the CPU loop with no
+ * error set, so that z80_main() runs the drive menu on core 1 and then starts
+ * the loop again where it left off.
+ */
+static volatile bool drive_menu_pending;
+
+static void chord_key(unsigned char code)
+{
+	if (tolower(code) == 'd') {
+		drive_menu_pending = true;
+		cpu_state = ST_STOPPED;
+	}
+}
+
+/*
  * Core 0 owns the LCD: drawing calls made on core 1 are forwarded here over
  * the inter-core FIFO and serviced by the IRQ handler multicore_init()
  * installs. So core 0 sets the hardware up and then just stays available,
@@ -150,6 +166,7 @@ int main(void)
 	keymap_init();
 	multicore_init();
 	keyboard_set_interrupt_callback(break_key);
+	keyboard_set_chord_callback(chord_key);
 
 	rtc_compat_init();	/* start the calendar clock */
 
@@ -264,7 +281,13 @@ static void z80_main(void)
 	ice_cust_help = picosim_ice_help;
 	ice_cmd_loop(0);
 #else
-	run_cpu();
+	for (;;) {
+		drive_menu_pending = false;
+		run_cpu();
+		if (!drive_menu_pending || cpu_error != NONE)
+			break;
+		drive_menu();
+	}
 #endif
 
 	scrollback_enable(false);

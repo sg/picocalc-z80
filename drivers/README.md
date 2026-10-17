@@ -31,6 +31,11 @@ Kept deliberately small so upstream fixes stay easy to merge.
   hinges on `char` being unsigned. It is on ARM EABI, so this was latent rather
   than live, but the types are now explicitly `unsigned char`.
 - `keyboard_init()` is declared `int` and fell off the end without returning.
+- Added `keyboard_set_chord_callback()`. The timer already acts on Ctrl+Alt+F1
+  and Ctrl+Alt+Del itself; any other key released with exactly Ctrl and Alt
+  held now goes to that callback, and while the two are held the key is not
+  queued for whatever is reading the keyboard, so the machine never sees the
+  chord typed. `srcsim/picosim.c` uses it for Ctrl+Alt+D, the drive menu.
 
 ### `term.c`
 
@@ -72,6 +77,14 @@ Kept deliberately small so upstream fixes stay easy to merge.
   erased over the cursor marks it hidden, so the next blink-off does not paint
   the old cell back over the new one. `term_hold_cursor()` keeps it off the
   screen while scrollback shows history in its place.
+- Added the overlay: `term_overlay_open()`, `_fill()`, `_text()` and
+  `_close()`. A box in screen cells drawn straight onto the panel for
+  something that is not the machine's output, the drive menu. It leaves the
+  shadow alone, so closing it is a repaint of the box from the shadow and the
+  text underneath comes back exactly as it was, colours included. It holds the
+  cursor while open and clips anything outside the box. The caller has to
+  keep the machine quiet meanwhile, which `srcsim/drivemenu.c` does by
+  running with the CPU loop stopped.
 
 ## Input translation lives elsewhere
 

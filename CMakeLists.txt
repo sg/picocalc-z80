@@ -42,6 +42,7 @@ add_executable(${PROJECT_NAME}
 	srcsim/status.c
 	srcsim/crash.c
 	srcsim/scrollback.c
+	srcsim/drivemenu.c
 	srcsim/dazzler.c
 	srcsim/hostbdos.c
 	srcsim/rtc_compat.c
