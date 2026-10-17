@@ -32,6 +32,7 @@
 #include "hardware/watchdog.h"
 
 #include "crash.h"
+#include "psram.h"
 #include "drivemenu.h"
 #ifdef PICOCALC_WIFI
 #include "wifimenu.h"
@@ -174,11 +175,18 @@ unsigned stack_headroom(void)
 }
 #endif
 
+/* the PSRAM's size and speed, for the banner; measured before core 1 owns
+   the machine's memory, which serves as the scratch buffer */
+static size_t psram_bytes;
+static unsigned psram_read_kbs, psram_write_kbs;
+
 int main(void)
 {
 #ifdef PICOCALC_STACK_WATERMARK
 	stack_paint();
 #endif
+	psram_bytes = psram_init();
+	psram_measure(bnk0, sizeof(bnk0), &psram_read_kbs, &psram_write_kbs);
 	lcd_init();
 	keyboard_init();
 	keymap_init();
@@ -262,6 +270,10 @@ static void z80_main(void)
 	       "Cortex-M33",
 #endif
 	       SYS_CLK_MHZ);
+	if (psram_bytes)
+		printf("%u KB PSRAM, reads %u MB/s, writes %u MB/s\n",
+		       (unsigned) (psram_bytes / 1024), psram_read_kbs / 1024,
+		       psram_write_kbs / 1024);
 	printf("%s\n", USR_CPR);
 	printf("<steve@stevegibson.com>\n\n");
 	printf("Based on:\n  Z80pack release %s\n", RELEASE);

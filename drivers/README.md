@@ -18,8 +18,11 @@ Kept deliberately small so upstream fixes stay easy to merge.
 
 - The PSRAM framebuffer mode is behind `PICOCALC_LCD_PSRAM_FB`, undefined by
   default. Upstream initialises polpo/rp2040-psram unconditionally in
-  `lcd_reset_pio()`, which claims PIO0 SM0 plus four GPIOs for a chip this
-  board does not carry. Defining it again would need that submodule back.
+  `lcd_reset_pio()`, which claims PIO0 SM0 plus four GPIOs for the PicoCalc
+  mainboard's own PSRAM, a chip on ordinary SPI pins that is only reachable
+  by explicit transfers and slow; this project does not use it. Defining the
+  mode again would need that submodule back. The memory this project does
+  use is the Pimoroni board's QSPI PSRAM, see `srcsim/psram.c`.
 - Dropped `#include "fs.h"`; it was unused, and this project must not have a
   second owner of the SD card.
 

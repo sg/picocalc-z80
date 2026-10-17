@@ -41,6 +41,7 @@ add_executable(${PROJECT_NAME}
 	srcsim/keymap.c
 	srcsim/status.c
 	srcsim/crash.c
+	srcsim/psram.c
 	srcsim/scrollback.c
 	srcsim/overlay.c
 	srcsim/drivemenu.c
