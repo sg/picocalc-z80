@@ -119,7 +119,7 @@ static int get_int(const char *prompt, const char *hint,
  * straight with the CPU type, which can never read as this magic.
  */
 #define CFG_MAGIC	"PC80"
-#define CFG_VERSION	3
+#define CFG_VERSION	4
 
 /*
  * try to read config file
@@ -183,6 +183,8 @@ void read_config(void)
 			f_read(&sd_file, &update_url, sizeof(update_url), &br);
 			update_url[UPDATE_URL_LEN] = '\0';
 		}
+		if (version >= 4)
+			f_read(&sd_file, &disk_cache, sizeof(disk_cache), &br);
 		f_close(&sd_file);
 
 		wifi_ssid[WIFI_SSID_LEN] = '\0';
@@ -229,6 +231,7 @@ void save_config(void)
 			&br);
 		f_write(&sd_file, &modem_init_str, sizeof(modem_init_str), &br);
 		f_write(&sd_file, &update_url, sizeof(update_url), &br);
+		f_write(&sd_file, &disk_cache, sizeof(disk_cache), &br);
 		f_close(&sd_file);
 	}
 }
@@ -671,6 +674,9 @@ void config(void)
 			menu_item("2", "Disk 2:", "%s", disks[2]);
 			menu_item("3", "Disk 3:", "%s", disks[3]);
 			menu_item("I", "Hard disk I:", "%s", disks[HD_SLOT]);
+			if (disk_cache_possible())
+				menu_item("M", "Disk cache in PSRAM:", "%s",
+					  disk_cache ? "on" : "off");
 			menu_item("R", "Run machine", NULL);
 			putchar('\n');
 		} else
@@ -825,6 +831,11 @@ again:
 				eject_disk(i);
 				putchar('\n');
 			}
+			break;
+
+		case 'm':
+			if (disk_cache_possible())
+				disk_cache_set(!disk_cache);
 			break;
 
 		case 'r':

@@ -39,6 +39,7 @@
 
 #include "sd-fdc.h"
 #include "disks.h"
+#include "psram.h"
 
 /* PicoCalc MicroSD socket, wired to SPI0 */
 #define SD_MISO		16
@@ -65,6 +66,27 @@ static FATFS fs; /* FatFs on MicroSD */
 static FIL dsk_fil[NUMDRV];
 static bool dsk_open[NUMDRV];
 
+int disk_cache = 1;
+
+#if PICO_RP2350 && defined(PIMORONI_PICO_PLUS2_W_PSRAM_CS_PIN)
+#define DISK_CACHE	1
+/* each floppy gets a 256 KB slot of the PSRAM, the hard disk 4 MB after them */
+#define CACHE_FD_SLOT	(256 * 1024)
+#define CACHE_HD_OFF	(NUMDISK * CACHE_FD_SLOT)
+#define CACHE_BYTES	(CACHE_HD_OFF + HD_TRK * HD_SPT * SEC_SZ)
+#define FD_TRACK	(SPT * SEC_SZ)
+#define HD_TRACK	(HD_SPT * SEC_SZ)
+#define BOUNCE		4096
+#define MAX_TRACKS	256
+
+static uint8_t cache_valid[NUMDRV][MAX_TRACKS / 8];
+/* the SD driver stores bytes one at a time, which belongs in SRAM; the
+   track moves to the PSRAM in whole pieces from here */
+static uint8_t __aligned(4) bounce[BOUNCE];
+#else
+#define DISK_CACHE	0
+#endif
+
 /* the hard disk is drive 8 to the BIOS but lives at the end of the tables */
 static int drive_slot(int drive)
 {
@@ -83,6 +105,73 @@ static int slot_tracks(int slot)
 static int slot_sectors(int slot)
 {
 	return (slot == HD_SLOT) ? HD_SPT : SPT;
+}
+
+/* ------------------------------------------------------------------ */
+/* the track cache                                                     */
+
+#if DISK_CACHE
+static bool cache_on(void)
+{
+	return disk_cache && psram_size() >= CACHE_BYTES;
+}
+
+static uint8_t *cache_track(int slot, int track)
+{
+	uint32_t off = (slot == HD_SLOT) ?
+		       CACHE_HD_OFF + (uint32_t) track * HD_TRACK :
+		       (uint32_t) slot * CACHE_FD_SLOT + (uint32_t) track * FD_TRACK;
+
+	return (uint8_t *) PSRAM_BASE + off;
+}
+
+static bool cache_has(int slot, int track)
+{
+	return cache_valid[slot][track >> 3] & (1 << (track & 7));
+}
+
+static void cache_drop(int slot)
+{
+	memset(cache_valid[slot], 0, sizeof(cache_valid[slot]));
+}
+
+/* the whole track from the card into its place; false leaves it uncached */
+static bool cache_fill(int slot, int track)
+{
+	int size = (slot == HD_SLOT) ? HD_TRACK : FD_TRACK, done, n;
+	uint8_t *dst = cache_track(slot, track);
+	unsigned int br;
+
+	if (f_lseek(&dsk_fil[slot], (FSIZE_t) track * size) != FR_OK)
+		return false;
+	for (done = 0; done < size; done += n) {
+		n = (size - done < BOUNCE) ? size - done : BOUNCE;
+		if (f_read(&dsk_fil[slot], bounce, n, &br) != FR_OK ||
+		    (int) br != n)
+			return false;
+		memcpy(dst + done, bounce, n);
+	}
+	cache_valid[slot][track >> 3] |= 1 << (track & 7);
+	return true;
+}
+#endif
+
+bool disk_cache_possible(void)
+{
+#if DISK_CACHE
+	return psram_size() >= CACHE_BYTES;
+#else
+	return false;
+#endif
+}
+
+void disk_cache_set(int on)
+{
+	disk_cache = on;
+#if DISK_CACHE
+	for (int i = 0; i < NUMDRV; i++)
+		cache_drop(i);
+#endif
 }
 
 /* buffer for disk/memory transfers */
@@ -110,6 +199,10 @@ static void close_disk(int slot)
 		f_close(&dsk_fil[slot]);
 		dsk_open[slot] = false;
 	}
+#if DISK_CACHE
+	/* whatever opens next in this slot is another image, or a reread */
+	cache_drop(slot);
+#endif
 }
 
 void init_disks(void)
@@ -387,6 +480,23 @@ BYTE read_sec(int drive, int track, int sector, WORD addr)
 	slot = drive_slot(drive);
 	disk_act = slot;
 
+#if DISK_CACHE
+	if (cache_on()) {
+		/* the first touch of a track reads all of it; a track the card
+		   would not give whole is read sector by sector as before */
+		if (!cache_has(slot, track) && !cache_fill(slot, track) &&
+		    prep_io(drive, track, sector, addr) != FDC_STAT_OK)
+			return FDC_STAT_SEEK;
+		if (cache_has(slot, track)) {
+			memcpy(dsk_buf, cache_track(slot, track) +
+			       (sector - 1) * SEC_SZ, SEC_SZ);
+			for (i = 0; i < SEC_SZ; i++)
+				dma_write(addr + i, dsk_buf[i]);
+			return FDC_STAT_OK;
+		}
+	}
+#endif
+
 	/* read sector into memory */
 	sd_res = f_read(&dsk_fil[slot], &dsk_buf[0], SEC_SZ, &br);
 	if ((sd_res == FR_OK) && (br == SEC_SZ)) {
@@ -427,6 +537,12 @@ BYTE write_sec(int drive, int track, int sector, WORD addr)
 		   to reach the card for a surprise removal to be survivable */
 		if (f_sync(&dsk_fil[slot]) == FR_OK) {
 			stat = FDC_STAT_OK;
+#if DISK_CACHE
+			/* the card has it, so the cached copy may keep it too */
+			if (cache_on() && cache_has(slot, track))
+				memcpy(cache_track(slot, track) +
+				       (sector - 1) * SEC_SZ, dsk_buf, SEC_SZ);
+#endif
 		} else {
 			close_disk(slot);
 			stat = FDC_STAT_WRITE;

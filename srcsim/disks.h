@@ -56,6 +56,16 @@ extern bool sd_mounted;
 extern volatile int disk_act;
 
 extern void init_disks(void), exit_disks(void);
+
+/*
+ * The track cache in the Pimoroni board's PSRAM: a track is read from the
+ * card the first time a sector of it is touched and served from memory
+ * after that, while writes go to the card as well, so the card is always
+ * the truth and nothing is lost to a reset or a pulled card.
+ */
+extern int disk_cache;			/* wanted, kept in PCALC.DAT */
+extern bool disk_cache_possible(void);	/* there is a PSRAM big enough */
+extern void disk_cache_set(int on);
 extern void list_files(const char *dir, const char *ext);
 extern bool load_file(const char *name);
 extern void check_disks(void);
