@@ -219,6 +219,13 @@ static void do_join(void)
 					  cur_password[0] ? cur_password : NULL,
 					  auth)) {
 		fail("join request refused");
+		/* the driver refuses while it is still tearing the old link
+		   down, so this deserves another go like any other failure;
+		   without it a drop could leave the machine off the air */
+		if (want_up) {
+			rejoin_pending = true;
+			rejoin_at = make_timeout_time_ms(REJOIN_DELAY_MS);
+		}
 		return;
 	}
 	fail_reason = "";
