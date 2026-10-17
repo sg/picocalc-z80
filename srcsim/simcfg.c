@@ -582,7 +582,7 @@ static void fit_terminal(void)
 	/* the terminal is a different width now, so the history is stale */
 	scrollback_clear();
 	lcd_clear();
-	term_clear();
+	term_reset();
 	status_paint();
 }
 

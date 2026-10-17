@@ -80,6 +80,10 @@ Kept deliberately small so upstream fixes stay easy to merge.
   erased over the cursor marks it hidden, so the next blink-off does not paint
   the old cell back over the new one. `term_hold_cursor()` keeps it off the
   screen while scrollback shows history in its place.
+- `term_clear()` no longer restarts the row numbering. It moves the view down
+  by a whole screen, blanking the rows that come in as a scroll does, so the
+  scrollback keeps what a program cleared away; `term_reset()` is the restart,
+  for a change of geometry, and the first clear before any reset goes there.
 - Added the overlay: `term_overlay_open()`, `_fill()`, `_text()` and
   `_close()`. A box in screen cells drawn straight onto the panel for
   something that is not the machine's output, the drive menu. It leaves the

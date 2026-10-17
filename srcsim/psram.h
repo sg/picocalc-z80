@@ -17,6 +17,13 @@
 
 #define PSRAM_BASE	0x11000000u
 
+/* how the chip is parcelled out; each user checks psram_size() reaches the
+   end of its part and does without when it does not */
+#define PSRAM_DISKS_OFF		0			/* disks.c: the track cache */
+#define PSRAM_DISKS_SIZE	(5u * 1024 * 1024)	/* four floppies and the hard disk */
+#define PSRAM_SCROLLBACK_OFF	(PSRAM_DISKS_OFF + PSRAM_DISKS_SIZE)
+#define PSRAM_SCROLLBACK_SIZE	(1280u * 1024)		/* scrollback.c: 16384 rows */
+
 /* set the QMI up and size the chip; first thing on core 0, before anything
    runs code with interrupts or touches the second core; 0 without a chip */
 extern size_t psram_init(void);

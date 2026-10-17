@@ -6,6 +6,7 @@
  *
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "pico/stdlib.h"
@@ -15,17 +16,29 @@
 #include "keyboard.h"
 
 #include "dazzler.h"
+#include "psram.h"
 #include "scrollback.h"
 
-static char sb[SB_LINES][SB_COLS];
+/* the ring: SB_LINES rows of SRAM, or far more rows of the Pimoroni
+   board's PSRAM, which also gives the SRAM back */
+#if PICO_RP2350 && defined(PIMORONI_PICO_PLUS2_W_PSRAM_CS_PIN)
+#define SB_PSRAM	1
+#define SB_PSRAM_LINES	(PSRAM_SCROLLBACK_SIZE / SB_COLS)
+#else
+#define SB_PSRAM	0
+static char sb_sram[SB_LINES][SB_COLS];
+#endif
+static char *sb;
+static int sb_lines = SB_LINES;
 static char blank[SB_COLS];
+static char line[SB_COLS];	/* a row on its way to the panel, in SRAM */
 static int sb_oldest;		/* oldest absolute row still in the shadow */
 static int offset;		/* rows back from live, 0 while live */
 static bool enabled;
 
 static char *sb_row(int row)
 {
-	return sb[((row % SB_LINES) + SB_LINES) % SB_LINES];
+	return sb + (((row % sb_lines) + sb_lines) % sb_lines) * SB_COLS;
 }
 
 /*
@@ -34,8 +47,8 @@ static char *sb_row(int row)
  */
 static void note_row(int row)
 {
-	if (row - sb_oldest >= SB_LINES)
-		sb_oldest = row - SB_LINES + 1;
+	if (row - sb_oldest >= sb_lines)
+		sb_oldest = row - sb_lines + 1;
 }
 
 static void observe(int what, int x, int y, char c)
@@ -72,8 +85,14 @@ static void observe(int what, int x, int y, char c)
 
 void scrollback_clear(void)
 {
+	int rows = term_get_height(), i;
+
 	memset(blank, ' ', sizeof(blank));
-	memset(sb, ' ', sizeof(sb));
+	/* only the rows the screen restarts on need blanking: every row after
+	   them is erased by the scroll that brings it into view before anything
+	   is written there, and the ring is too big in PSRAM to wipe each time */
+	for (i = 0; i < rows && i < sb_lines; i++)
+		memset(sb_row(i), ' ', SB_COLS);
 	sb_oldest = 0;
 	offset = 0;
 }
@@ -98,8 +117,16 @@ static void repaint(void)
 		row = scroll + k - offset;
 		y = ((scroll + k) * font.glyph_height) % lcd_scroll_height;
 
-		const char *src = (row >= sb_oldest) ? sb_row(row) : blank;
+		const char *src = blank;
 		int used = cols * font.glyph_width;
+
+		/* the glyph drawing reads the text a byte at a time from code
+		   in flash, which is the pattern that thrashes the XIP cache
+		   when the text is in PSRAM, so a row is copied out first */
+		if (row >= sb_oldest) {
+			memcpy(line, sb_row(row), cols);
+			src = line;
+		}
 
 		/* drawing the text paints its own background, so only the
 		   sliver the glyphs do not reach has to be filled */
@@ -239,6 +266,21 @@ void scrollback_enable(bool on)
 
 void scrollback_init(void)
 {
+#if SB_PSRAM
+	if (psram_size() >= PSRAM_SCROLLBACK_OFF + PSRAM_SCROLLBACK_SIZE) {
+		sb = (char *) (PSRAM_BASE + PSRAM_SCROLLBACK_OFF);
+		sb_lines = SB_PSRAM_LINES;
+	} else {
+		/* the chip did not answer, so the SRAM ring is made on the heap */
+		sb = malloc(SB_LINES * SB_COLS);
+		if (!sb) {
+			sb = blank;
+			sb_lines = 1;
+		}
+	}
+#else
+	sb = &sb_sram[0][0];
+#endif
 	scrollback_clear();
 	term_set_observer(observe);
 }

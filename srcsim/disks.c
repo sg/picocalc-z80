@@ -74,6 +74,7 @@ int disk_cache = 1;
 #define CACHE_FD_SLOT	(256 * 1024)
 #define CACHE_HD_OFF	(NUMDISK * CACHE_FD_SLOT)
 #define CACHE_BYTES	(CACHE_HD_OFF + HD_TRK * HD_SPT * SEC_SZ)
+_Static_assert(CACHE_BYTES <= PSRAM_DISKS_SIZE, "the track cache outgrew its part of the PSRAM");
 #define FD_TRACK	(SPT * SEC_SZ)
 #define HD_TRACK	(HD_SPT * SEC_SZ)
 #define BOUNCE		4096
@@ -113,7 +114,7 @@ static int slot_sectors(int slot)
 #if DISK_CACHE
 static bool cache_on(void)
 {
-	return disk_cache && psram_size() >= CACHE_BYTES;
+	return disk_cache && psram_size() >= PSRAM_DISKS_OFF + CACHE_BYTES;
 }
 
 static uint8_t *cache_track(int slot, int track)
@@ -122,7 +123,7 @@ static uint8_t *cache_track(int slot, int track)
 		       CACHE_HD_OFF + (uint32_t) track * HD_TRACK :
 		       (uint32_t) slot * CACHE_FD_SLOT + (uint32_t) track * FD_TRACK;
 
-	return (uint8_t *) PSRAM_BASE + off;
+	return (uint8_t *) PSRAM_BASE + PSRAM_DISKS_OFF + off;
 }
 
 static bool cache_has(int slot, int track)
@@ -159,7 +160,7 @@ static bool cache_fill(int slot, int track)
 bool disk_cache_possible(void)
 {
 #if DISK_CACHE
-	return psram_size() >= CACHE_BYTES;
+	return psram_size() >= PSRAM_DISKS_OFF + CACHE_BYTES;
 #else
 	return false;
 #endif

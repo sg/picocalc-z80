@@ -124,7 +124,7 @@ static u8 color_index(u16 color) {
 	return best;
 }
 
-// the shadow follows the font and the scroll area, which only change through term_clear()
+// the shadow follows the font and the scroll area, which only change through term_reset()
 static void cells_fit() {
 	int rows = (lcd_scroll_height + font.glyph_height - 1) / font.glyph_height;
 	int cols = font.term_width;
@@ -241,10 +241,32 @@ void term_reset() {
 	ansi.cursor_visible = false;
 }
 
+/*
+ * A clear moves the view down a whole screen, the way a scroll does, instead
+ * of starting the row numbering over: the rows that were on the screen stay
+ * where the scrollback can reach them, which matters to programs that clear
+ * for every page. Only term_reset() restarts the numbering, for a change of
+ * geometry. Before the first reset there is no shadow yet, so that is also
+ * where the very first clear goes.
+ */
 void term_clear() {
+	int top = ansi.scroll + font.term_height, y;
+	if (!cells) {
+		lcd_fill(0, 0, 0, LCD_WIDTH, lcd_scroll_height);
+		term_reset();
+		return;
+	}
+	for (y = top; y < top + font.term_height; y++) {
+		observe(TERM_OBS_ERASE_ROW, 0, y, 0);
+		shadow_blank(0, y, font.term_width, ansi.bg);
+	}
 	// whatever sits below the scroll area is not the terminal's to clear
-	lcd_fill(0, 0, 0, LCD_WIDTH, lcd_scroll_height);
-	term_reset();
+	lcd_fill(ansi.bg, 0, 0, LCD_WIDTH, lcd_scroll_height);
+	ansi.scroll = top;
+	lcd_scroll(top * font.glyph_height);
+	ansi.x = ansi.len = 0;
+	ansi.y = top;
+	ansi.cursor_visible = false;
 }
 
 void term_erase_line(int y) {
