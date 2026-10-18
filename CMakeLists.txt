@@ -45,6 +45,7 @@ add_executable(${PROJECT_NAME}
 	srcsim/scrollback.c
 	srcsim/overlay.c
 	srcsim/drivemenu.c
+	srcsim/loadmenu.c
 	srcsim/dazzler.c
 	srcsim/hostbdos.c
 	srcsim/rtc_compat.c

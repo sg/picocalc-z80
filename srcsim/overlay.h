@@ -49,4 +49,15 @@ extern bool ov_nav_key(unsigned char code);
    which puts the old text back */
 extern bool ov_edit(int row, const char *prompt, char *buf, int max);
 
+/* the 8.3 stems matching pattern in dir, upper case and in name order; how
+   many, up to max */
+#define OV_NAME_LEN	8
+extern int ov_list_dir(const char *dir, const char *pattern,
+		       char names[][OV_NAME_LEN + 1], int max);
+
+/* a list to choose from, filling the box: the arrows, PgUp, PgDn, Home and
+   End move, Enter returns the index, Esc -1; ov_msg shows under the list */
+extern int ov_pick(const char *title, const char *footer,
+		   char names[][OV_NAME_LEN + 1], int n, int sel);
+
 #endif /* !OVERLAY_INC */

@@ -4,10 +4,13 @@
  * The overlay box kit. See overlay.h.
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "pico/stdlib.h"
+
+#include "ff.h"
 
 #include "term.h"
 #include "overlay.h"
@@ -139,6 +142,84 @@ bool ov_edit(int row, const char *prompt, char *buf, int max)
 			   ev.code >= 32 && ev.code < 127 && n < max - 1) {
 			buf[n++] = ev.code;
 			buf[n] = '\0';
+		}
+	}
+}
+
+int ov_list_dir(const char *dir, const char *pattern,
+		char names[][OV_NAME_LEN + 1], int max)
+{
+	DIR dp;
+	FILINFO fno;
+	char stem[OV_NAME_LEN + 1];
+	const char *dot;
+	int n = 0, len, i;
+
+	if (f_findfirst(&dp, &fno, dir, pattern) != FR_OK)
+		return 0;
+	while (fno.fname[0] && n < max) {
+		dot = strrchr(fno.fname, '.');
+		len = dot ? (int) (dot - fno.fname) : (int) strlen(fno.fname);
+		/* CP/M names, which is all the machine's tables hold */
+		if (len > 0 && len <= OV_NAME_LEN) {
+			for (i = 0; i < len; i++)
+				stem[i] = toupper((unsigned char) fno.fname[i]);
+			stem[len] = '\0';
+			for (i = n; i > 0 && strcmp(names[i - 1], stem) > 0; i--)
+				strcpy(names[i], names[i - 1]);
+			strcpy(names[i], stem);
+			n++;
+		}
+		if (f_findnext(&dp, &fno) != FR_OK)
+			break;
+	}
+	f_closedir(&dp);
+	return n;
+}
+
+int ov_pick(const char *title, const char *footer,
+	    char names[][OV_NAME_LEN + 1], int n, int sel)
+{
+	int rows = box_rows - 5, top = 0, i, k;
+	input_event_t ev;
+
+	for (;;) {
+		if (sel < 0)
+			sel = 0;
+		if (n && sel > n - 1)
+			sel = n - 1;
+		if (sel < top)
+			top = sel;
+		if (sel >= top + rows)
+			top = sel - rows + 1;
+		ov_edge(0, title);
+		ov_line(1, "", OV_FG, OV_BG);
+		for (i = 0; i < rows; i++) {
+			k = top + i;
+			if (k >= n)
+				ov_line(2 + i, (k == 0) ? "(nothing here)" : "",
+					OV_DIM, OV_BG);
+			else
+				ov_line(2 + i, names[k], (k == sel) ? OV_BG : OV_FG,
+					(k == sel) ? OV_FG : OV_BG);
+		}
+		ov_text(2, box_cols - 3, OV_DIM, OV_BG, (top > 0) ? "^" : " ");
+		ov_text(1 + rows, box_cols - 3, OV_DIM, OV_BG,
+			(top + rows < n) ? "v" : " ");
+		ov_line(box_rows - 3, footer, OV_FG, OV_BG);
+		ov_line(box_rows - 2, ov_msg, OV_TITLE, OV_BG);
+		ov_edge(box_rows - 1, "");
+		ev = ov_wait_key(0);
+		ov_msg[0] = '\0';
+		switch (ev.code) {
+		case KEY_UP:	sel--; break;
+		case KEY_DOWN:	sel++; break;
+		case KEY_PAGEUP:	sel -= rows; break;
+		case KEY_PAGEDOWN:	sel += rows; break;
+		case KEY_HOME:	sel = 0; break;
+		case KEY_END:	sel = n - 1; break;
+		case KEY_ENTER:	return n ? sel : -1;
+		case KEY_ESC:	return -1;
 		}
 	}
 }

@@ -68,6 +68,8 @@ extern bool disk_cache_possible(void);	/* there is a PSRAM big enough */
 extern void disk_cache_set(int on);
 extern void list_files(const char *dir, const char *ext);
 extern bool load_file(const char *name);
+/* the same without the talking: bytes loaded, or false with *err set */
+extern bool load_image(const char *name, int *bytes, const char **err);
 extern void check_disks(void);
 extern void mount_disk(int drive, const char *name);
 /* put image name, a stem with no directory or extension, in a slot; false

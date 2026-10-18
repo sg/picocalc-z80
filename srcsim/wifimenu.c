@@ -6,6 +6,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "pico/stdlib.h"
@@ -22,10 +23,37 @@
 #include "overlay.h"
 #include "wifimenu.h"
 
-#define ROWS		12
+#define ROWS		15
 #define TICK_MS		250	/* how often the status row follows the radio */
 
-enum { R_NET = 2, R_STATUS = 3, R_MSG = 10 };
+enum { R_NET = 2, R_STATUS = 3, R_AUTO = 8, R_CY = 9, R_NTP = 10,
+       R_MODEM = 11, R_MSG = 13 };
+
+/* everything the box can change, for deciding whether to save on close */
+typedef struct {
+	char ssid[WIFI_SSID_LEN + 1], pw[WIFI_PWD_LEN + 1];
+	char ntp[HOST_NAME_MAX + 1], modem[MODEM_INIT_LEN + 1], country[3];
+	int autoconnect, utc;
+} settings_t;
+
+static void snapshot(settings_t *s)
+{
+	strcpy(s->ssid, wifi_ssid);
+	strcpy(s->pw, wifi_password);
+	strcpy(s->ntp, ntp_server);
+	strcpy(s->modem, modem_init_str);
+	strcpy(s->country, wifi_country);
+	s->autoconnect = wifi_autoconnect;
+	s->utc = utc_offset;
+}
+
+static bool changed(const settings_t *s)
+{
+	return strcmp(s->ssid, wifi_ssid) || strcmp(s->pw, wifi_password) ||
+	       strcmp(s->ntp, ntp_server) || strcmp(s->modem, modem_init_str) ||
+	       strcmp(s->country, wifi_country) ||
+	       s->autoconnect != wifi_autoconnect || s->utc != utc_offset;
+}
 
 static void draw_status(void)
 {
@@ -45,7 +73,7 @@ static void draw_status(void)
 
 static void draw(void)
 {
-	char buf[OV_MAX_COLS + 40];
+	char buf[OV_MAX_COLS + 80];
 
 	ov_edge(0, "WiFi");
 	ov_line(1, "", OV_FG, OV_BG);
@@ -57,10 +85,19 @@ static void draw(void)
 	ov_line(5, "C: connect          D: disconnect", OV_FG, OV_BG);
 	ov_line(6, "S: scan for a network", OV_FG, OV_BG);
 	ov_line(7, "N: network name     P: password", OV_FG, OV_BG);
-	ov_line(8, "Esc: close", OV_FG, OV_BG);
-	ov_line(9, "", OV_FG, OV_BG);
+	snprintf(buf, sizeof(buf), "A: connect at boot: %s",
+		 wifi_autoconnect ? "yes" : "no");
+	ov_line(R_AUTO, buf, OV_FG, OV_BG);
+	snprintf(buf, sizeof(buf), "Y: country: %-9s U: UTC offset: %d",
+		 wifi_country[0] ? wifi_country : "worldwide", utc_offset);
+	ov_line(R_CY, buf, OV_FG, OV_BG);
+	snprintf(buf, sizeof(buf), "T: NTP server: %s", ntp_server);
+	ov_line(R_NTP, buf, OV_FG, OV_BG);
+	snprintf(buf, sizeof(buf), "M: modem init: %s", modem_init_str);
+	ov_line(R_MODEM, buf, OV_FG, OV_BG);
+	ov_line(12, "Esc: close", OV_FG, OV_BG);
 	ov_line(R_MSG, ov_msg, OV_TITLE, OV_BG);
-	ov_edge(11, "");
+	ov_edge(ROWS - 1, "");
 }
 
 static void connect(void)
@@ -83,6 +120,51 @@ static void password(void)
 	strcpy(wifi_password, pw);
 	snprintf(ov_msg, sizeof(ov_msg), pw[0] ? "Password set" :
 		 "Password cleared");
+}
+
+static void country(void)
+{
+	char buf[3];
+
+	strcpy(buf, wifi_country);
+	if (!ov_edit(R_CY, "Y: country, two letters or none: ", buf, sizeof(buf)))
+		return;
+	buf[0] = toupper((unsigned char) buf[0]);
+	buf[1] = toupper((unsigned char) buf[1]);
+	if (!buf[0])
+		wifi_country[0] = '\0';
+	else if (isalpha((unsigned char) buf[0]) && isalpha((unsigned char) buf[1]))
+		strcpy(wifi_country, buf);
+	else {
+		snprintf(ov_msg, sizeof(ov_msg), "Two letters, or none for worldwide");
+		return;
+	}
+	/* the code is given to the radio when it starts */
+	if (wifi_get_state() != WIFI_OFF)
+		snprintf(ov_msg, sizeof(ov_msg), "Applies from the next boot");
+}
+
+static void utc(void)
+{
+	char buf[5];
+	int v;
+
+	snprintf(buf, sizeof(buf), "%d", utc_offset);
+	if (!ov_edit(R_CY, "U: UTC offset in hours: ", buf, sizeof(buf)))
+		return;
+	v = atoi(buf);
+	if (buf[0] && v >= -12 && v <= 14)
+		utc_offset = v;
+	else
+		snprintf(ov_msg, sizeof(ov_msg), "The offset runs from -12 to 14");
+}
+
+static void ntp(void)
+{
+	if (!ov_edit(R_NTP, "T: NTP server: ", ntp_server, HOST_NAME_MAX + 1))
+		return;
+	if (!ntp_server[0])
+		strcpy(ntp_server, DEFAULT_NTP);
 }
 
 static void draw_scan(int n, int sel, int top)
@@ -204,13 +286,12 @@ static void scan(void)
 
 void wifi_menu(void)
 {
-	char ssid0[WIFI_SSID_LEN + 1], pw0[WIFI_PWD_LEN + 1];
+	settings_t before;
 	wifi_state_t was = wifi_get_state(), now;
 	input_event_t ev;
 	bool done = false;
 
-	strcpy(ssid0, wifi_ssid);
-	strcpy(pw0, wifi_password);
+	snapshot(&before);
 	scrollback_leave();
 	ov_open(ROWS);
 	draw();
@@ -252,6 +333,22 @@ void wifi_menu(void)
 		case 'p':
 			password();
 			break;
+		case 'a':
+			wifi_autoconnect = !wifi_autoconnect;
+			break;
+		case 'y':
+			country();
+			break;
+		case 'u':
+			utc();
+			break;
+		case 't':
+			ntp();
+			break;
+		case 'm':
+			ov_edit(R_MODEM, "M: modem init: ", modem_init_str,
+				MODEM_INIT_LEN + 1);
+			break;
 		case KEY_ESC:
 			done = true;
 			break;
@@ -261,8 +358,8 @@ void wifi_menu(void)
 	}
 	ov_close();
 
-	/* a network chosen here is kept, as one chosen in the config
-	   dialog is */
-	if (strcmp(ssid0, wifi_ssid) || strcmp(pw0, wifi_password))
+	/* what the config dialog saved when the machine started is saved here
+	   as it changes, since the box is also reached while it runs */
+	if (changed(&before))
 		save_config();
 }

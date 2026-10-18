@@ -292,26 +292,23 @@ void list_files(const char *dir, const char *ext)
  * load a file 'name' into memory
  * returns true on success, false on error
  */
-bool load_file(const char *name)
+bool load_image(const char *name, int *bytes, const char **err)
 {
-	int i = 0;
-	bool res;
-	register unsigned int j;
-	unsigned int br;
+	static char msg[48];
 	char SFN[DISKLEN+1];
+	unsigned int br;
+	register unsigned int j;
+	int i = 0;
 
 	strcpy(SFN, CODE_DIR);
 	strcat(SFN, name);
 	strcat(SFN, ".BIN");
 
-	/* try to open file */
 	sd_res = f_open(&sd_file, SFN, FA_READ);
 	if (sd_res != FR_OK) {
-		puts("File not found");
+		*err = "File not found";
 		return false;
 	}
-
-	/* read file into memory */
 	while ((sd_res = f_read(&sd_file, dsk_buf, SEC_SZ, &br)) == FR_OK) {
 		for (j = 0; j < br; j++)
 			dma_write(i + j, dsk_buf[j]);
@@ -319,16 +316,27 @@ bool load_file(const char *name)
 			break;
 		i += SEC_SZ;
 	}
-	if (sd_res != FR_OK) {
-		printf("f_read error: %s (%d)\n", fres_str(sd_res), sd_res);
-		res = false;
-	} else {
-		printf("loaded file \"%s\" (%d bytes)\n", SFN, i + br);
-		res = true;
-	}
-
 	f_close(&sd_file);
-	return res;
+	if (sd_res != FR_OK) {
+		snprintf(msg, sizeof(msg), "read error: %s", fres_str(sd_res));
+		*err = msg;
+		return false;
+	}
+	*bytes = i + br;
+	return true;
+}
+
+bool load_file(const char *name)
+{
+	const char *err;
+	int bytes;
+
+	if (!load_image(name, &bytes, &err)) {
+		puts(err);
+		return false;
+	}
+	printf("loaded file \"%s%s.BIN\" (%d bytes)\n", CODE_DIR, name, bytes);
+	return true;
 }
 
 /*

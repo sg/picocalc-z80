@@ -42,12 +42,15 @@
 #include "scrollback.h"
 
 #include "disks.h"
+#include "drivemenu.h"
+#include "loadmenu.h"
 #include "picosim.h"
 
 #include "net_vars.h"
 #ifdef PICOCALC_WIFI
 #include "wifi.h"
 #include "update.h"
+#include "wifimenu.h"
 #include "version.h"
 #endif
 
@@ -238,215 +241,6 @@ void save_config(void)
 
 #ifdef PICOCALC_WIFI
 /*
- * one line summary of the WiFi state, for both menus
- */
-static void net_start(void)
-{
-	if (wifi_get_state() == WIFI_OFF) {
-		wifi_start(wifi_country);
-		wifi_wait(5000);
-		if (wifi_get_state() == WIFI_OFF)
-			printf("WiFi: %s\n", wifi_fail_reason());
-	}
-}
-
-static void net_connect(void)
-{
-	char ip[16];
-
-	if (!wifi_ssid[0]) {
-		puts("No network chosen\n");
-		return;
-	}
-	printf("Connecting to %s... ", wifi_ssid);
-	wifi_connect(wifi_ssid, wifi_password);
-	wifi_wait(35000);
-	if (wifi_get_state() == WIFI_UP) {
-		wifi_get_ip(ip, sizeof(ip));
-		printf("connected, %s\n", ip);
-		/* NTP normally answers well inside this */
-		for (int i = 0; i < 30 && !wifi_clock_synced(); i++)
-			sleep_ms(100);
-		if (wifi_clock_synced())
-			puts("Clock set from NTP");
-	} else
-		printf("failed: %s\n", wifi_fail_reason());
-	putchar('\n');
-}
-
-static void net_scan(void)
-{
-	const wifi_scan_result_t *r;
-	int i, n;
-
-	net_start();
-	if (wifi_get_state() == WIFI_OFF)
-		return;
-	if (wifi_get_state() == WIFI_JOINING) {
-		puts("Busy connecting, try again in a moment\n");
-		return;
-	}
-	printf("Scanning... ");
-	wifi_scan();
-	wifi_wait(15000);
-	n = wifi_scan_count();
-	printf("%d found\n", n);
-	for (i = 0; i < n; i++) {
-		r = wifi_scan_result(i);
-		printf("%2d %-24.24s %4d dBm ch %2d %s\n", i + 1, r->ssid,
-		       r->rssi, r->channel,
-		       !r->auth ? "open" : (r->auth & 4) ? "WPA2" :
-		       (r->auth & 2) ? "WPA" : "WEP");
-	}
-	putchar('\n');
-}
-
-/*
- * network configuration
- */
-static void net_config(void)
-{
-	bool quit = false;
-	char s[HOST_NAME_MAX+1];
-	const wifi_scan_result_t *r;
-	int i;
-
-	while (!quit) {
-		wifi_status_text(s, sizeof(s));
-		printf(SGR_LABEL "Network:" SGR_OFF " %s\n\n", s);
-		menu_item("S", "Scan for networks", NULL);
-		if (wifi_scan_count()) {
-			char keys[8];
-
-			snprintf(keys, sizeof(keys), "1-%d", wifi_scan_count());
-			menu_item(keys, "Choose a network from the scan", NULL);
-		}
-		menu_item("E", "SSID:", "%s", wifi_ssid);
-		menu_item("P", "Password:", "%s",
-			  wifi_password[0] ? "********" : "(none)");
-		menu_item("C", "Connect", NULL);
-		menu_item("D", "Disconnect", NULL);
-		menu_item("A", "Connect at boot:", "%s",
-			  wifi_autoconnect ? "yes" : "no");
-		menu_item("Y", "Country:", "%s",
-			  wifi_country[0] ? wifi_country : "worldwide");
-		menu_item("N", "NTP server:", "%s", ntp_server);
-		menu_item("U", "UTC offset in hours:", "%d", utc_offset);
-		menu_item("M", "Modem init:", "%s", modem_init_str);
-		menu_item("X", "Exit to Main Menu", NULL);
-
-		printf("\n" SGR_KEY "Command:" SGR_OFF " ");
-		get_cmdline(s, 3);
-		putchar('\n');
-
-		if (isdigit((unsigned char) s[0])) {
-			i = atoi(s);
-			if ((r = wifi_scan_result(i - 1)) == NULL)
-				continue;
-			if (strcmp(wifi_ssid, r->ssid)) {
-				strcpy(wifi_ssid, r->ssid);
-				wifi_password[0] = '\0';
-			}
-			if (r->auth) {
-				printf("Password%s: ", wifi_password[0] ?
-				       " (Enter keeps the current one)" : "");
-				get_cmdline(s, WIFI_PWD_LEN+1);
-				putchar('\n');
-				if (s[0])
-					strcpy(wifi_password, s);
-			} else
-				wifi_password[0] = '\0';
-			net_connect();
-			continue;
-		}
-
-		switch (tolower((unsigned char) s[0])) {
-		case 's':
-			net_scan();
-			break;
-
-		case 'e':
-			printf("Enter SSID: ");
-			get_cmdline(s, WIFI_SSID_LEN+1);
-			strcpy(wifi_ssid, s);
-			putchar('\n');
-			break;
-
-		case 'p':
-			printf("Enter password: ");
-			get_cmdline(s, WIFI_PWD_LEN+1);
-			strcpy(wifi_password, s);
-			putchar('\n');
-			break;
-
-		case 'c':
-			net_connect();
-			break;
-
-		case 'd':
-			if (wifi_get_state() != WIFI_OFF) {
-				wifi_disconnect();
-				wifi_wait(2000);
-			}
-			break;
-
-		case 'a':
-			wifi_autoconnect = !wifi_autoconnect;
-			break;
-
-		case 'y':
-			printf("Enter country code (Enter for worldwide): ");
-			get_cmdline(s, 3);
-			putchar('\n');
-			wifi_country[0] = toupper((unsigned char) s[0]);
-			wifi_country[1] = toupper((unsigned char) s[1]);
-			wifi_country[2] = '\0';
-			if (wifi_country[0] && !wifi_country[1])
-				wifi_country[0] = '\0';
-			if (wifi_get_state() != WIFI_OFF)
-				puts("The radio is already running, the country "
-				     "applies from the next boot\n");
-			break;
-
-		case 'n':
-			printf("Enter NTP server: ");
-			get_cmdline(s, HOST_NAME_MAX+1);
-			if (strlen(s))
-				strcpy(ntp_server, s);
-			else
-				strcpy(ntp_server, DEFAULT_NTP);
-			putchar('\n');
-			break;
-
-		case 'u':
-			/* get_int() spends -1 on "no input", a real offset */
-			printf("Enter UTC offset in hours (-12 - 14): ");
-			get_cmdline(s, 4);
-			putchar('\n');
-			if (s[0]) {
-				i = atoi(s);
-				if (i >= -12 && i <= 14)
-					utc_offset = i;
-				else
-					puts("Invalid UTC offset");
-			}
-			break;
-
-		case 'm':
-			printf("Enter modem init string: ");
-			get_cmdline(s, MODEM_INIT_LEN+1);
-			strcpy(modem_init_str, s);
-			putchar('\n');
-			break;
-
-		case 'x':
-			quit = true;
-			break;
-		}
-	}
-}
-
-/*
  * Software update: a check against the release site, and from there the
  * download. See update.h.
  */
@@ -612,19 +406,34 @@ void apply_font(void)
 	fit_terminal();
 }
 
+/* the drives on one line: A:CPM22 B:TE C:- D:COMMS I:- */
+static const char *disk_summary(char *buf, size_t len)
+{
+	const char *base, *dot;
+	size_t n = 0;
+	int i;
+
+	for (i = 0; i < NUMDRV && n < len; i++) {
+		base = strrchr(disks[i], '/');
+		base = base ? base + 1 : disks[i];
+		if (!base[0])
+			base = "-";
+		dot = strchr(base, '.');
+		n += snprintf(buf + n, len - n, "%s%c:%.*s", i ? " " : "",
+			      drive_letter(i),
+			      dot ? (int) (dot - base) : (int) strlen(base), base);
+	}
+	return buf;
+}
+
 /*
  * Configuration dialog for the machine
  */
 void config(void)
 {
-	const char *cpath = CODE_DIR;
-	const char *cext = "*.BIN";
-	const char *dpath = DISKS_DIR;
-	const char *dext = "*.DSK";
-	const char *hext = "*.HDD";
-	char s[FNLEN+1];
+	char s[FNLEN+1], summary[64];
 	int go_flag = 0;
-	int i, n, menu;
+	int i, n;
 	static const char *dotw[7] = { "Sun", "Mon", "Tue", "Wed",
 				       "Thu", "Fri", "Sat" };
 #ifdef PICOCALC_WIFI
@@ -638,49 +447,37 @@ void config(void)
 	rtc_set_datetime(&t);
 	sleep_us(64);
 
-	menu = 1;
-
 	while (!go_flag) {
-		if (menu) {
-			rtc_get_datetime(&t);
-			printf(SGR_LABEL "Current time:" SGR_OFF " %s %04d-%02d-%02d "
-			       "%02d:%02d:%02d\n", dotw[t.dotw],
-			       t.year, t.month, t.day, t.hour, t.min, t.sec);
+		rtc_get_datetime(&t);
+		printf(SGR_LABEL "Current time:" SGR_OFF " %s %04d-%02d-%02d "
+		       "%02d:%02d:%02d\n", dotw[t.dotw],
+		       t.year, t.month, t.day, t.hour, t.min, t.sec);
 #ifdef PICOCALC_WIFI
-			wifi_status_text(s_net, sizeof(s_net));
-			menu_item("N", "Network:", "%s", s_net);
-			menu_item("U", "Update PicoCalc-Z80", NULL);
+		wifi_status_text(s_net, sizeof(s_net));
+		menu_item("N", "Network setup:", "%s", s_net);
+		menu_item("U", "Update PicoCalc-Z80", NULL);
 #endif
-			menu_item("V", "Font:", "%s (%dx%d)",
-				  font_file[0] ? font_file : "built-in",
-				  term_get_width(), term_get_height());
-			menu_item("K", "Arrow keys:", "%s",
-				  (keymap_arrows == KEYMAP_ARROWS_WORDSTAR) ?
-				  "WordStar" : "ANSI");
-			menu_item("A", "Set date", NULL);
-			menu_item("T", "Set time", NULL);
-			menu_item("C", "Switch CPU, currently", "%s",
-				  (cpu == Z80) ? "Z80" : "8080");
-			if (speed == 0)
-				menu_item("S", "CPU speed:", "unlimited");
-			else
-				menu_item("S", "CPU speed:", "%d MHz", speed);
-			menu_item("P", "Port 255 value:", "%02XH", fp_value);
-			menu_item("F", "List files", NULL);
-			menu_item("L", "Load file", NULL);
-			menu_item("D", "List disks", NULL);
-			menu_item("0", "Disk 0:", "%s", disks[0]);
-			menu_item("1", "Disk 1:", "%s", disks[1]);
-			menu_item("2", "Disk 2:", "%s", disks[2]);
-			menu_item("3", "Disk 3:", "%s", disks[3]);
-			menu_item("I", "Hard disk I:", "%s", disks[HD_SLOT]);
-			if (disk_cache_possible())
-				menu_item("M", "Disk cache in PSRAM:", "%s",
-					  disk_cache ? "on" : "off");
-			menu_item("R", "Run machine", NULL);
-			putchar('\n');
-		} else
-			menu = 1;
+		menu_item("V", "Font:", "%s (%dx%d)",
+			  font_file[0] ? font_file : "built-in",
+			  term_get_width(), term_get_height());
+		menu_item("K", "Arrow keys:", "%s",
+			  (keymap_arrows == KEYMAP_ARROWS_WORDSTAR) ?
+			  "WordStar" : "ANSI");
+		menu_item("A", "Set date/time", NULL);
+		menu_item("C", "Switch CPU, currently", "%s",
+			  (cpu == Z80) ? "Z80" : "8080");
+		if (speed == 0)
+			menu_item("S", "CPU speed:", "unlimited");
+		else
+			menu_item("S", "CPU speed:", "%d MHz", speed);
+		menu_item("P", "Port 255 value:", "%02XH", fp_value);
+		menu_item("L", "Load file", NULL);
+		menu_item("D", "Disk setup:", "%s", disk_summary(summary, sizeof(summary)));
+		if (disk_cache_possible())
+			menu_item("M", "Disk cache in PSRAM:", "%s",
+				  disk_cache ? "on" : "off");
+		menu_item("R", "Run machine", NULL);
+		putchar('\n');
 		printf(SGR_KEY "Command:" SGR_OFF " ");
 		get_cmdline(s, 2);
 		putchar('\n');
@@ -688,7 +485,7 @@ void config(void)
 		switch (tolower((unsigned char) s[0])) {
 #ifdef PICOCALC_WIFI
 		case 'n':
-			net_config();
+			wifi_menu();
 			break;
 
 		case 'u':
@@ -715,16 +512,6 @@ void config(void)
 				t.day = i;
 				n++;
 			}
-			if (n > 0) {
-				rtc_set_datetime(&t);
-				sleep_us(64);
-			}
-			putchar('\n');
-			break;
-
-		case 't':
-			n = 0;
-			rtc_get_datetime(&t);
 			if ((i = get_int("hour", "", 0, 23)) >= 0) {
 				t.hour = i;
 				n++;
@@ -796,41 +583,18 @@ again:
 			putchar('\n');
 			break;
 
-		case 'f':
-			list_files(cpath, cext);
-			putchar('\n');
-			menu = 0;
-			break;
-
 		case 'l':
-			prompt_fn(s);
-			/* run from the program rather than the boot ROM, which
-			   would read the boot sector of A: over it */
-			if (s[0] && load_file(s))
+			if (load_menu(s, sizeof(s), &n)) {
+				/* run from the program rather than the boot ROM,
+				   which would read the boot sector of A: over it */
 				PC = 0;
-			putchar('\n');
+				printf("%s.BIN loaded at 0, %d bytes; R runs it\n\n",
+				       s, n);
+			}
 			break;
 
 		case 'd':
-			list_files(dpath, dext);
-			list_files(dpath, hext);
-			putchar('\n');
-			menu = 0;
-			break;
-
-		case 'i':
-		case '0':
-		case '1':
-		case '2':
-		case '3':
-			i = (s[0] == 'i') ? HD_SLOT : s[0] - '0';
-			prompt_fn(s);
-			if (s[0])
-				mount_disk(i, s);
-			else {
-				eject_disk(i);
-				putchar('\n');
-			}
+			drive_menu();
 			break;
 
 		case 'm':

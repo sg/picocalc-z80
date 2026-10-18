@@ -29,6 +29,7 @@
 #define NAMES_MAX	48	/* images the picker lists */
 
 _Static_assert(NUMDRV == 5 && HD_SLOT == 4, "the menu lists A to D and I");
+_Static_assert(FNLEN == OV_NAME_LEN, "the box kit lists CP/M names");
 
 /* the image in a slot without its directory, as CP/M would name it */
 static const char *image_name(int slot)
@@ -43,36 +44,11 @@ static const char *image_name(int slot)
 /* ------------------------------------------------------------------ */
 /* the picker                                                          */
 
-/* the images on the card for a slot: upper case stems, in name order */
+/* the images on the card for a slot */
 static int list_images(int slot, char names[][FNLEN + 1])
 {
-	DIR dp;
-	FILINFO fno;
-	char stem[FNLEN + 1];
-	const char *dot;
-	int n = 0, len, i;
-
-	if (f_findfirst(&dp, &fno, DISKS_DIR,
-			(slot == HD_SLOT) ? "*.HDD" : "*.DSK") != FR_OK)
-		return 0;
-	while (fno.fname[0] && n < NAMES_MAX) {
-		dot = strrchr(fno.fname, '.');
-		len = dot ? (int) (dot - fno.fname) : (int) strlen(fno.fname);
-		/* the drive table only has room for an 8.3 name */
-		if (len > 0 && len <= FNLEN) {
-			for (i = 0; i < len; i++)
-				stem[i] = toupper((unsigned char) fno.fname[i]);
-			stem[len] = '\0';
-			for (i = n; i > 0 && strcmp(names[i - 1], stem) > 0; i--)
-				strcpy(names[i], names[i - 1]);
-			strcpy(names[i], stem);
-			n++;
-		}
-		if (f_findnext(&dp, &fno) != FR_OK)
-			break;
-	}
-	f_closedir(&dp);
-	return n;
+	return ov_list_dir(DISKS_DIR, (slot == HD_SLOT) ? "*.HDD" : "*.DSK",
+			   names, NAMES_MAX);
 }
 
 /* which other drive of the same kind holds this image, or -1 */
