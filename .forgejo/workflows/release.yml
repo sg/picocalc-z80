@@ -29,7 +29,7 @@ jobs:
     container:
       # ci/builder/Dockerfile, built on the runner's Docker host by
       # ci/builder/build-image.sh: toolchain, Pico SDK and picotool included
-      image: picocalc-builder:2.2.0
+      image: picocalc-builder:2.3.1
     steps:
       - name: Check out the tag
         run: |

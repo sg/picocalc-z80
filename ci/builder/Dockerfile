@@ -4,7 +4,7 @@
 # its time building firmware rather than installing a toolchain.
 FROM ubuntu:24.04
 
-ARG PICO_SDK_VERSION=2.2.0
+ARG PICO_SDK_VERSION=2.3.1
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -q \

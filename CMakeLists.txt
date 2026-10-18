@@ -28,6 +28,11 @@ endforeach()
 # Pull in SDK (must be before project)
 include(pico_sdk_import.cmake)
 
+# the linker script variables below arrived in 2.3.0; 2.3.1 is the tested one
+if(PICO_SDK_VERSION_STRING VERSION_LESS "2.3.1")
+	message(FATAL_ERROR "Pico SDK 2.3.1 or later is required, found ${PICO_SDK_VERSION_STRING}")
+endif()
+
 project(picocalc-z80 C CXX ASM)
 
 pico_sdk_init()
@@ -246,14 +251,18 @@ if(PICOCALC_WIFI)
 endif()
 # core 0's stack: the TLS handshake runs on it, inside lwIP's callbacks, and
 # was measured at 2.5 KB with everything else on the core, too close to the
-# SDK's 4 KB scratch bank, so rp2350_memmap.ld moves the stack into main RAM
+# SDK's 4 KB scratch bank, so the stack moves into main RAM
 if(PICOCALC_TLS)
 	# core 1 runs on picosim.c's own stack; the SDK's default one only has
 	# to fit its scratch bank
 	target_compile_definitions(${PROJECT_NAME} PRIVATE
 		PICO_STACK_SIZE=16384
 		PICO_CORE1_STACK_SIZE=4096)
-	pico_set_linker_script(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/rp2350_memmap.ld)
+	# the SDK puts core 0's stack at the top of scratch Y, which holds nothing
+	# else here, so scratch Y becomes the last 16 KB of main RAM
+	pico_set_linker_script_var(${PROJECT_NAME} RAM_LENGTH 0x7C000)
+	pico_set_linker_script_var(${PROJECT_NAME} SCRATCH_Y_ORIGIN 0x2007C000)
+	pico_set_linker_script_var(${PROJECT_NAME} SCRATCH_Y_LENGTH 0x4000)
 else()
 	target_compile_definitions(${PROJECT_NAME} PRIVATE PICO_STACK_SIZE=4096)
 endif()

@@ -3,10 +3,10 @@
 # Rerun now and then to pick up Ubuntu updates; --pull and --no-cache make
 # sure the base image and packages are fresh rather than cached.
 #
-#   ./build-image.sh [sdk-version]      default: 2.2.0
+#   ./build-image.sh [sdk-version]      default: 2.3.1
 set -e
 
-SDK=${1:-2.2.0}
+SDK=${1:-2.3.1}
 cd "$(dirname "$0")"
 docker build --pull --no-cache \
     --build-arg PICO_SDK_VERSION="$SDK" \
