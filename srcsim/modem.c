@@ -38,7 +38,7 @@ enum {
 	S_BS = 5,
 	S_WAITCD = 7,		/* seconds to wait for a connection */
 	S_GUARD = 12,		/* escape guard time in 1/50 s */
-	S_LISTEN = 14,		/* port AT&A1 listens on */
+	S_LISTEN = 14,		/* port AT&A listens on */
 	S_TELNET = 15,		/* 0 raw TCP, 1 telnet */
 	S_TN_SGA = 16,		/* telnet options: bit 0 WILL, bit 1 DO */
 	S_TN_ECHO = 17,
@@ -60,6 +60,7 @@ static const char *const result_text[] = {
 static int sreg[NREGS];
 static int sreg_sel;
 static bool echo, quiet, verbose;
+static bool daemon_mode;		/* AT&A1: a BBS owns the line, no +++ escape */
 static char ttype[33];
 
 static enum { M_CMD, M_DIAL, M_ONLINE } mode;
@@ -536,6 +537,7 @@ static void defaults(void)
 	echo = true;
 	quiet = false;
 	verbose = true;
+	daemon_mode = false;
 	strcpy(ttype, "ANSI");
 }
 
@@ -557,7 +559,7 @@ static void help(void)
 		"ATE0/1 echo      ATQ0/1 quiet       ATV0/1 words",
 		"ATSn=v  ATSn?    S2 escape  S7 connect wait  S12 guard",
 		"                 S15 telnet  S20/S21 window size",
-		"AT&A1  listen on port S14 (8023)   AT&A0  stop",
+		"AT&A  listen on port S14 (8023)    AT&A1  also E0Q1",
 		"ATA  answer      ATS0=n  answer after n rings",
 		"ATI0 version     ATI1 network",
 		"AT+T=name  telnet terminal type, AT+T? to show",
@@ -629,8 +631,15 @@ static int execute(char *p)
 			n = get_num(&p);
 			if (c == 'F')
 				defaults();
-			else if (c == 'A')
-				ns_listen(n ? (uint16_t) sreg[S_LISTEN] : 0);
+			else if (c == 'A') {
+				/* z80pack: any &A listens, &A1 also quietly */
+				ns_listen((uint16_t) sreg[S_LISTEN]);
+				if (n) {
+					daemon_mode = true;
+					echo = false;
+					quiet = true;
+				}
+			}
 			else if (!c || !strchr("CDKSW", c))
 				code = R_ERROR;
 			break;
@@ -875,16 +884,19 @@ void modem_init(void)
 	pstate = P_IDLE;
 	last_cmd[0] = '\0';
 
-	if (modem_init_str[0]) {
-		s = modem_init_str;
-		if (!strncasecmp(s, "AT", 2))
-			s += 2;
-		snprintf(line, sizeof(line), "%s", s);
-		running_init = true;
-		strcpy(cmd, line);
-		execute(cmd);
-		running_init = false;
-	}
+	s = modem_init_string();
+	if (!strncasecmp(s, "AT", 2))
+		s += 2;
+	snprintf(line, sizeof(line), "%s", s);
+	running_init = true;
+	strcpy(cmd, line);
+	execute(cmd);
+	running_init = false;
+}
+
+const char *modem_init_string(void)
+{
+	return modem_init_str[0] ? modem_init_str : MODEM_INIT_DEFAULT;
 }
 
 bool modem_rx_ready(void)
@@ -925,7 +937,7 @@ void modem_putc(uint8_t c)
 
 	case M_ONLINE:
 		now = modem_time_us();
-		if (c == sreg[S_ESC] && plus_count < 3 &&
+		if (!daemon_mode && c == sreg[S_ESC] && plus_count < 3 &&
 		    (plus_count || now - last_tx_us >=
 				   (uint64_t) sreg[S_GUARD] * 20000)) {
 			plus_count++;

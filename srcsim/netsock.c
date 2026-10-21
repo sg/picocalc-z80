@@ -333,6 +333,8 @@ static void start_listening(void)
 		listen_want = 0;
 		return;
 	}
+	/* accepted calls inherit this, so their closing pcbs don't block a rebind */
+	ip_set_option(p, SOF_REUSEADDR);
 	if (tcp_bind(p, IP_ANY_TYPE, listen_want) != ERR_OK) {
 		tcp_close(p);
 		listen_error = "port in use";

@@ -18,6 +18,8 @@
 #include <stdint.h>
 
 extern void modem_init(void);
+/* the saved init string, or the firmware's when none is saved */
+extern const char *modem_init_string(void);
 extern bool modem_rx_ready(void);
 extern uint8_t modem_getc(void);
 extern bool modem_tx_ready(void);

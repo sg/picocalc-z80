@@ -18,6 +18,7 @@
 
 #include "net_vars.h"
 #include "wifi.h"
+#include "modem.h"
 #include "simcfg.h"
 #include "scrollback.h"
 #include "overlay.h"
@@ -93,7 +94,7 @@ static void draw(void)
 	ov_line(R_CY, buf, OV_FG, OV_BG);
 	snprintf(buf, sizeof(buf), "T: NTP server: %s", ntp_server);
 	ov_line(R_NTP, buf, OV_FG, OV_BG);
-	snprintf(buf, sizeof(buf), "M: modem init: %s", modem_init_str);
+	snprintf(buf, sizeof(buf), "M: modem init: %s", modem_init_string());
 	ov_line(R_MODEM, buf, OV_FG, OV_BG);
 	ov_line(12, "Esc: close", OV_FG, OV_BG);
 	ov_line(R_MSG, ov_msg, OV_TITLE, OV_BG);
@@ -165,6 +166,21 @@ static void ntp(void)
 		return;
 	if (!ntp_server[0])
 		strcpy(ntp_server, DEFAULT_NTP);
+}
+
+/* the firmware's string is kept as empty in PCALC.DAT, so a later firmware
+   can change it for everyone who never set their own */
+static void modem(void)
+{
+	char buf[MODEM_INIT_LEN + 1];
+
+	snprintf(buf, sizeof(buf), "%s", modem_init_string());
+	if (!ov_edit(R_MODEM, "M: modem init: ", buf, sizeof(buf)))
+		return;
+	if (!buf[0] || !strcmp(buf, MODEM_INIT_DEFAULT))
+		modem_init_str[0] = '\0';
+	else
+		strcpy(modem_init_str, buf);
 }
 
 static void draw_scan(int n, int sel, int top)
@@ -346,8 +362,7 @@ void wifi_menu(void)
 			ntp();
 			break;
 		case 'm':
-			ov_edit(R_MODEM, "M: modem init: ", modem_init_str,
-				MODEM_INIT_LEN + 1);
+			modem();
 			break;
 		case KEY_ESC:
 			done = true;

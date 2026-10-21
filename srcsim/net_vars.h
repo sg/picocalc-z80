@@ -22,6 +22,9 @@
 #define HOST_NAME_MAX	63
 #define DEFAULT_NTP	"pool.ntp.org"
 #define MODEM_INIT_LEN	63
+/* none, so a plain boot neither listens nor answers; BBS software such as
+   BYE sets both up itself */
+#define MODEM_INIT_DEFAULT	""
 #define UPDATE_URL_LEN	127
 
 extern char wifi_ssid[WIFI_SSID_LEN+1];
@@ -30,7 +33,7 @@ extern char ntp_server[HOST_NAME_MAX+1];
 extern int utc_offset;
 extern char wifi_country[3];	/* ISO 3166 alpha-2, empty for worldwide */
 extern int wifi_autoconnect;
-extern char modem_init_str[MODEM_INIT_LEN+1];
+extern char modem_init_str[MODEM_INIT_LEN+1];	/* empty: MODEM_INIT_DEFAULT */
 extern char update_url[UPDATE_URL_LEN+1];	/* a repository page, see update.h */
 
 #endif /* !NET_VARS_INC */

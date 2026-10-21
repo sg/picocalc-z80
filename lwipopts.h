@@ -56,6 +56,9 @@
 /* MBEDTLS_SSL_VERIFY_NONE: no CA store yet, the SHA-256 sums cover integrity */
 #define ALTCP_MBEDTLS_AUTHMODE      0
 #endif
+/* lets the modem listen again on its port while the last call still holds
+   it, closing or in TIME_WAIT, as BYE does straight after hanging up */
+#define SO_REUSE                    1
 #define TCP_MSS                     1460
 #define TCP_SND_BUF                 (2 * TCP_MSS)
 #define TCP_SND_QUEUELEN            ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
