@@ -22,7 +22,6 @@ target_include_directories(drivers INTERFACE
 target_link_libraries(drivers INTERFACE
 	pico_stdlib
 	pico_multicore
-	pico_fatfs
 	hardware_pio
 	hardware_i2c
 	hardware_irq

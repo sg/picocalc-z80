@@ -37,7 +37,9 @@ project(picocalc-z80 C CXX ASM)
 
 pico_sdk_init()
 
-add_subdirectory(${PICO_FATFS} pico_fatfs)
+# FatFs itself from the submodule, but not its tf_card.c: sdcard/ holds a
+# copy that checks the card's CRCs
+add_subdirectory(${PICO_FATFS}/pio/spi pio_spi)
 add_subdirectory(drivers)
 
 add_executable(${PROJECT_NAME}
@@ -58,6 +60,10 @@ add_executable(${PROJECT_NAME}
 	srcsim/simio.c
 	srcsim/simmem.c
 	srcsim/net_vars.c
+	sdcard/tf_card.c
+	${PICO_FATFS}/fatfs/ff.c
+	${PICO_FATFS}/fatfs/ffsystem.c
+	${PICO_FATFS}/fatfs/ffunicode.c
 	${Z80PACK}/iodevices/rtc80.c
 	${Z80PACK}/iodevices/sd-fdc.c
 	${Z80PACK}/z80core/sim8080.c
@@ -74,12 +80,10 @@ add_executable(${PROJECT_NAME}
 	${Z80PACK}/z80core/simz80.c
 )
 
-# fatfs_conf must precede pico_fatfs's own conf dir so our ffconf.h wins
-target_include_directories(${PROJECT_NAME} BEFORE PRIVATE
-	${CMAKE_CURRENT_LIST_DIR}/fatfs_conf
-)
-
 target_include_directories(${PROJECT_NAME} PRIVATE
+	${CMAKE_CURRENT_LIST_DIR}/fatfs_conf
+	${CMAKE_CURRENT_LIST_DIR}/sdcard
+	${PICO_FATFS}/fatfs
 	${CMAKE_CURRENT_LIST_DIR}/srcsim
 	${Z80PACK}/iodevices
 	${Z80PACK}/z80core
@@ -96,10 +100,9 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
 
-# pico_fatfs is an INTERFACE library, so its sources land in our target and
-# inherit our warning flags; it is not -Wextra clean upstream
+# pico_fatfs is not -Wextra clean upstream
 set_source_files_properties(
-	${PICO_FATFS}/tf_card.c
+	${CMAKE_CURRENT_LIST_DIR}/sdcard/tf_card.c
 	${PICO_FATFS}/fatfs/ff.c
 	${PICO_FATFS}/fatfs/ffunicode.c
 	${PICO_FATFS}/fatfs/ffsystem.c
@@ -126,8 +129,9 @@ target_link_libraries(${PROJECT_NAME}
 	pico_stdlib
 	pico_multicore
 	pico_aon_timer
-	pico_fatfs
+	pio_spi
 	drivers
+	hardware_clocks
 	hardware_spi
 	hardware_watchdog
 )

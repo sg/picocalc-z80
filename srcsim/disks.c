@@ -16,6 +16,7 @@
  * 29-JUN-2024 split of from memsim.c and picosim.c
  * 15-AUG-2026 ported from no-OS-FatFS/SDIO to pico_fatfs/SPI for the PicoCalc
  * 15-AUG-2026 keep disk images open across sector accesses
+ * 24-OCT-2026 run the card at 25 MHz, with every block CRC checked
  */
 
 #include <stdint.h>
@@ -47,6 +48,10 @@
 #define SD_SCK		18
 #define SD_MOSI		19
 #define SD_DETECT	22
+
+/* SPI-mode cards are only specified to 25 MHz; pico_fatfs's 50 MHz default
+   comes out at 37.5 MHz on an RP2350 and was seen flipping bits on reads */
+#define SD_CLK_FAST	(25 * MHZ)
 
 FIL sd_file;	/* at any time we have only one file open */
 FRESULT sd_res;	/* result code from FatFS */
@@ -211,7 +216,7 @@ void init_disks(void)
 	pico_fatfs_spi_config_t config = {
 		.spi_inst = spi0,
 		.clk_slow = CLK_SLOW_DEFAULT,
-		.clk_fast = CLK_FAST_DEFAULT,
+		.clk_fast = SD_CLK_FAST,
 		.pin_miso = SD_MISO,
 		.pin_cs   = SD_CS,
 		.pin_sck  = SD_SCK,
@@ -229,6 +234,8 @@ void init_disks(void)
 	/* a missing card must not be fatal, the config dialog still works */
 	sd_res = f_mount(&fs, "", 1);
 	sd_mounted = (sd_res == FR_OK);
+	if (sd_mounted && !pico_fatfs_crc_enabled())
+		puts("SD: card refuses CRC checking, reads are unchecked");
 	if (!sd_mounted) {
 		if (gpio_get(SD_DETECT))
 			puts("SD: no card inserted, no disks available");

@@ -17,7 +17,7 @@
 #include "lcd.h"
 #include "lcd_lut.h"
 #include "default_font.h"
-#include "../pico_fatfs/fatfs/ff.h"
+#include "ff.h"
 
 #define LCD_SCK 10
 #define LCD_TX  11

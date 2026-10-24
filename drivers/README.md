@@ -25,6 +25,10 @@ Kept deliberately small so upstream fixes stay easy to merge.
   use is the Pimoroni board's QSPI PSRAM, see `srcsim/psram.c`.
 - Dropped `#include "fs.h"`; it was unused, and this project must not have a
   second owner of the SD card.
+- `#include "../pico_fatfs/fatfs/ff.h"` is now `"ff.h"`. The relative path
+  only resolved through pico_fatfs's root on the include path, which the
+  build no longer adds now that the card driver lives in `sdcard/`; for the
+  same reason `drivers` no longer links `pico_fatfs`.
 
 ### `keyboard.c`
 
