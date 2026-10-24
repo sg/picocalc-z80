@@ -102,6 +102,14 @@ bool pico_fatfs_crc_enabled(void);
 */
 uint pico_fatfs_get_error_count(void);
 
+/**
+* Report that the card may have been removed or swapped, for instance from a
+* card-detect interrupt. The next FatFs call re-initialises the card and
+* remounts the volume, which invalidates files and directories left open.
+* Safe to call from an interrupt or the other core.
+*/
+void pico_fatfs_media_changed(void);
+
 #ifdef __cplusplus
 }
 #endif

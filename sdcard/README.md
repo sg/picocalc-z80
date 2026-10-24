@@ -24,3 +24,7 @@
   all of it.
 - `pico_fatfs_crc_enabled()` and `pico_fatfs_get_error_count()` report
   whether the card took CMD59 and how many block transfers have failed.
+- `pico_fatfs_media_changed()` marks the card as possibly swapped, so the
+  next FatFs call re-initialises it and remounts the volume. A card-detect
+  interrupt can call it, leaving every FatFs call on the core that makes
+  them.

@@ -67,6 +67,7 @@ BYTE CardType;          /* Card type flags */
 
 static bool CrcOn;          /* the card took CMD59, so both sides check */
 static uint Errors;          /* attempts that failed, retried or not */
+static volatile bool MediaChanged;
 static uint16_t Crc16Tab[256];
 
 static BYTE crc7 (const BYTE* p, UINT n)
@@ -536,6 +537,12 @@ DSTATUS disk_status (
 {
     if (drv) return STA_NOINIT;     /* Supports only drive 0 */
 
+    /* FatFs re-initialises and remounts when told so, in its caller's
+       context; an interrupt only ever sets the flag, never Stat */
+    if (MediaChanged) {
+        MediaChanged = false;
+        Stat |= STA_NOINIT;
+    }
     return Stat;    /* Return disk status */
 }
 
@@ -881,4 +888,9 @@ bool pico_fatfs_crc_enabled(void)
 uint pico_fatfs_get_error_count(void)
 {
     return Errors;
+}
+
+void pico_fatfs_media_changed(void)
+{
+    MediaChanged = true;
 }
