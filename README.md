@@ -910,3 +910,13 @@ Written here: `srcsim/http.c`, `update.c`, `untar.c`, `sha256.c`,
 - **`srcsim/simcfg.c`** — the LCD brightness menu entry is gone until it can be
   wired to the keyboard controller's backlight register. The field is still
   written to `PCALC.DAT` so the format does not have to change later.
+
+## Licence
+
+MIT, see `LICENSE`. The parts that come from elsewhere keep their own
+licences: the z80pack sources and the files adapted from them Udo Munk's MIT
+licence, uzlib the zlib licence and pico_fatfs its BSD-style licence. TE and
+MESCC are GPLv2, and so is the TE on `TE.DSK`, whose source is
+`submodules/te` and `cpm/te`. The software on the disk images in
+`sd_files/Z80/disks` is distributed under the terms its authors released it
+with.
