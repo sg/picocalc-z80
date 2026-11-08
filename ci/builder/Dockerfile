@@ -1,4 +1,5 @@
-# Job image for the release workflow: Ubuntu 24.04 brought up to date, the
+# Job image for a self-hosted runner; GitHub Actions builds this project with
+# .github/actions/pico-toolchain instead. Ubuntu 24.04 brought up to date, the
 # same gcc-arm-none-eabi 13.2 as the dev machine, the Pico SDK with its
 # submodules, and picotool installed where the SDK finds it, so a run spends
 # its time building firmware rather than installing a toolchain.
@@ -30,4 +31,4 @@ RUN git clone --quiet --depth 1 --branch "$PICO_SDK_VERSION" \
 # checkouts in the job workspace belong to another uid
 RUN git config --system --add safe.directory '*'
 
-LABEL org.opencontainers.image.description="Pico SDK $PICO_SDK_VERSION firmware builder for picocalc-z80 and picocalc_lua"
+LABEL org.opencontainers.image.description="Pico SDK $PICO_SDK_VERSION firmware builder for PicoCalc projects"

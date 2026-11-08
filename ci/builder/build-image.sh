@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the release workflow's job image on the Docker host the runner uses.
+# Build the self-hosted runner's job image on the Docker host it uses.
 # Rerun now and then to pick up Ubuntu updates; --pull and --no-cache make
 # sure the base image and packages are fresh rather than cached.
 #

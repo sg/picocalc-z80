@@ -731,8 +731,10 @@ for what it found.
 
 ## Building
 
-Needs an `arm-none-eabi` toolchain, CMake and the Pico SDK 2.3.1 or later
-(`PICO_SDK_PATH`); CMake stops on
+Ready-made UF2s for each board and the SD card archive are on the
+[releases page](https://github.com/sg/picocalc-z80/releases). To build your
+own you need an `arm-none-eabi` toolchain, CMake and the Pico SDK 2.3.1 or
+later (`PICO_SDK_PATH`, default `../pico-sdk`); CMake stops on
 an older one. z80pack (dev branch),
 pico_fatfs and uzlib are git submodules:
 
@@ -742,7 +744,8 @@ git clone --recurse-submodules https://github.com/sg/picocalc-z80.git
 ```
 
 `build.sh` builds one board or all of them, each in its own `build-<board>`
-directory, and copies `picocalc-z80-<board>-<version>.uf2` to `$DEPLOY:
+directory, and copies `picocalc-z80-<board>-<version>.uf2` to `$DEPLOY`
+(default `../uf2-deploy`):
 
 ```sh
 ./build.sh pim2w             # one board
@@ -769,6 +772,31 @@ you want other checkouts.
 with `mbedtls_config.h` from the project root, and moves core 0's stack from
 the SDK's 4 KB scratch bank into main RAM, where it can be 16 KB. `build.sh` also passes the short board
 name in, which the update client needs to name its own release asset.
+
+## Releases
+
+Pushing a version tag builds every board with GitHub Actions and stages a
+draft release:
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` checks out the tag with its submodules on
+Ubuntu 24.04, with Ubuntu's Arm GCC and Pico SDK 2.3.1 with picotool
+(`.github/actions/pico-toolchain`, cached between runs), runs
+`./build.sh all <tag>` and `make-sd-archive.sh`, and attaches the five `.uf2`
+files, the SD card archive and `SHA256SUMS.txt` to a draft whose notes list
+the commits since the previous tag. Review it under Releases and publish it
+by hand; the update menu only sees published releases. An existing tag can
+be rebuilt from the Actions tab (Release, Run workflow), optionally as a
+pre-release; delete the old draft first.
+
+Every push to `main` and every pull request also builds the five boards
+(`.github/workflows/build.yml`) and keeps the UF2s as the run's artifacts.
+`ci/builder` is a Docker image with the same toolchain, for a self-hosted
+runner.
 
 ## Moving files in and out of CP/M
 

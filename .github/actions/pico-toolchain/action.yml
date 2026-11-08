@@ -1,0 +1,51 @@
+# Ubuntu's Arm GCC (13.2 on 24.04, as on the dev machine) and the Pico SDK
+# with picotool, which is built once per SDK version and then cached.
+name: Pico toolchain
+description: Arm GCC, the Pico SDK and picotool for build.sh
+
+inputs:
+  sdk-version:
+    description: "Pico SDK and picotool tag"
+    default: "2.3.1"
+
+runs:
+  using: composite
+  steps:
+    - name: Install the compiler
+      shell: bash
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends \
+          gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
+          libusb-1.0-0-dev pkg-config
+
+    - name: Restore the SDK and picotool
+      id: cache
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/pico-sdk
+          ~/picotool
+        key: pico-sdk-${{ inputs.sdk-version }}-ubuntu-24.04-${{ runner.arch }}
+
+    - name: Fetch the SDK and build picotool
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SDK: ${{ inputs.sdk-version }}
+      run: |
+        git clone --quiet --depth 1 --branch "$SDK" --recurse-submodules --shallow-submodules \
+          https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+        # the SDK looks for this exact version before it falls back to building one
+        git clone --quiet --depth 1 --branch "$SDK" \
+          https://github.com/raspberrypi/picotool.git "$RUNNER_TEMP/picotool"
+        cmake -S "$RUNNER_TEMP/picotool" -B "$RUNNER_TEMP/picotool/build" \
+          -DCMAKE_BUILD_TYPE=Release -DPICO_SDK_PATH="$HOME/pico-sdk" \
+          -DCMAKE_INSTALL_PREFIX="$HOME/picotool"
+        make -C "$RUNNER_TEMP/picotool/build" -j"$(nproc)" install
+
+    - name: Point the build at them
+      shell: bash
+      run: |
+        echo "PICO_SDK_PATH=$HOME/pico-sdk" >> "$GITHUB_ENV"
+        echo "picotool_DIR=$HOME/picotool/lib/cmake/picotool" >> "$GITHUB_ENV"

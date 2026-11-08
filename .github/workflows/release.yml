@@ -1,0 +1,85 @@
+# Builds the firmware for every board plus the MicroSD card archive for a tag
+# and stages them as a draft release to review and publish by hand.
+# Runs when a tag such as v1.2.0 is pushed, or on demand for an existing tag.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the draft as a pre-release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency: release-${{ inputs.tag || github.ref_name }}
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  PRERELEASE: ${{ inputs.prerelease }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      # the toolchain action comes from the workflow's own commit, as a tag
+      # rebuilt by hand may predate it
+      - name: Check out the toolchain action
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+
+      - uses: ./.github/actions/pico-toolchain
+
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          # the previous tag bounds the change list
+          fetch-depth: 0
+          submodules: true
+          path: src
+
+      - name: Build every board
+        run: |
+          export DEPLOY="$PWD/dist"
+          cd src && ./build.sh all "$TAG"
+
+      - name: Pack the MicroSD card files
+        run: VERSION="$TAG" src/make-sd-archive.sh "dist/picocalc-z80-sd-files-$TAG.tar.gz"
+
+      - name: Stage a draft release
+        run: |
+          # drafts have no tag yet, so only the list finds them
+          if gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' |
+             grep -qxF "$TAG"; then
+            echo "A release or draft for $TAG already exists; delete it or choose a new tag"
+            exit 1
+          fi
+
+          # the update client checks both the firmware and the card archive against these
+          (cd dist && sha256sum -- *.uf2 *.tar.gz > SHA256SUMS.txt)
+
+          # the first release lists everything
+          prev=$(git -C src describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          {
+            echo "Changes since ${prev:-the first commit}:"
+            echo
+            git -C src log --format='- %s' "${prev:+$prev..}$TAG"
+          } > notes.md
+
+          flags=
+          [ "$PRERELEASE" = true ] && flags=--prerelease
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --verify-tag $flags \
+            --title "$TAG" --notes-file notes.md dist/*
+          echo "Draft release $TAG is waiting at $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"

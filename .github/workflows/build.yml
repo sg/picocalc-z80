@@ -1,0 +1,32 @@
+# Builds every board for a push to main or a pull request, with the UF2s kept
+# as the run's artifacts; releases come from release.yml.
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # git describe names the build after the nearest tag
+          fetch-depth: 0
+          submodules: true
+
+      - uses: ./.github/actions/pico-toolchain
+
+      - name: Build every board
+        run: DEPLOY="$PWD/dist" ./build.sh all
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: picocalc-z80-uf2
+          path: dist/*.uf2
