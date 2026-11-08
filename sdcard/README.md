@@ -3,7 +3,7 @@
 `tf_card.c` and `tf_card.h` are the SPI driver from elehobica's
 [pico_fatfs](https://github.com/elehobica/pico_fatfs), copied at `e0e512b`
 (BSD 2-clause, see `LICENSE`). FatFs itself still builds from
-`submodules/pico_fatfs`. picocalc-ftpserver carries the same copy.
+`submodules/pico_fatfs`.
 
 ## Local changes
 
