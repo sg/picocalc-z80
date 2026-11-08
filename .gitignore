@@ -22,3 +22,6 @@ __pycache__/
 
 # the config file holds the WiFi password
 PCALC.DAT
+
+# private developer notes
+/DEV_NOTES.md
