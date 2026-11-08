@@ -844,9 +844,8 @@ sector in flight.
 The card runs at 25 MHz, the most SPI mode is specified for, with CRC checking
 on in both directions (`sdcard/`, pico_fatfs's driver with the checks added).
 pico_fatfs's default asks for 50 MHz, which comes out at 37.5 MHz on an RP2350,
-and its driver discarded the card's CRCs; picocalc-ftpserver, on the same
-socket and driver, once sent a 51 MB file with one bit flipped. Here a misread
-would not stay a misread: a 128 byte CP/M sector write makes FatFs read the
+and its driver discarded the card's CRCs.
+Here a misread would not stay a misread: a 128 byte CP/M sector write makes FatFs read the
 512 byte card sector around it and write all of it back, CP/M rewrites the
 directory sectors it reads, and the track cache keeps a bad track for the
 session. A block that fails its CRC is read or written again, up to three
@@ -872,16 +871,15 @@ it is built with, both GPL; only `cpm/te/tepcalc.c` is ours.
 
 Borrowed and reworked:
 
-- `drivers/` — LCD, keyboard and terminal from my fork of picocalc_lua, see
-  `drivers/README.md`
-- `srcsim/wifi.c`, `srcsim/netsock.c` — from my fork of picocalc_lua's `wifi.c` and
-  `socket.c`, made non-blocking and moved to core 0; NTP after Udo's `net_ntp.c`
+- `drivers/` — LCD, keyboard and terminal from picocalc_lua, see `drivers/README.md`
+- `srcsim/wifi.c`, `srcsim/netsock.c` — from `wifi.c` and `socket.c` in my other projects, 
+made non-blocking and moved to core 0, and NTP after Udo's `net_ntp.c`
 - `srcsim/modem.c` — after David McNaughton's `generic-at-modem.c` in z80pack
 - `srcsim/hostbdos.c` — Mike Douglas's `simbdos.c` ported to FatFs
 - `sdcard/` — pico_fatfs's SPI card driver with CRC checks and retries, see
   `sdcard/README.md`
-- `mbedtls_config.h` — my fork of picocalc_lua's, which came from the SDK's kitchen_sink
-  example, with the record sizes and the allocator changed
+- `mbedtls_config.h` — my code, based on the SDK's kitchen_sink example, with 
+the record sizes and the allocator changed
 
 Written here: `srcsim/http.c`, `update.c`, `untar.c`, `sha256.c`,
 `version.c` and `crash.c`.
