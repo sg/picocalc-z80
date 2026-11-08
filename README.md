@@ -31,7 +31,7 @@ phosphor green, and a drives line in bright cyan.
 
 ```
 Z80 4MHz  192.168.1.42  A:R                            14:22:07   87%
-A:NZCOM.DSK    B:XYBASIC.DSK  C:[EMPTY]      D:[EMPTY]      I:4MB.HDD
+A:NZCOM.DSK    B:XYBASIC.DSK  C:[EMPTY]      D:[EMPTY]      I:HD0.HDD
 ```
 
 The first line displays the CPU and its clockspeed, the IP address when WiFi is up, a
@@ -194,7 +194,7 @@ FAT-formatted card, or extract a release's
 
 | Path | Contents |
 | ---- | -------- |
-| `/Z80/disks/` | `CPM22.DSK` ships ready to use, `COMMS.DSK` holds the modem programs, `NZCOM.DSK` boots into Z-System, `XYBASIC.DSK` (not bootable) holds Udo's builds of Mark Williams' XYBASIC, `TE.DSK` (not bootable) the TE text editor |
+| `/Z80/disks/` | `CPM22.DSK` ships ready to use, `COMMS.DSK` holds the modem programs, `NZCOM.DSK` boots into Z-System, `XYBASIC.DSK` (not bootable) holds Udo's builds of Mark Williams' XYBASIC, `TE.DSK` (not bootable) the TE text editor, `DAZZLER.DSK` (not bootable) Udo's Cromemco Dazzler demos |
 | `/Z80/code/`  | Udo's bare machine programs from `submodules/z80pack/picosim/src-examples`: the 8080 CPU test, Tiny BASIC, Microchess, the Altair BASICs; `L` loads one at address 0 and `R` runs it |
 | `/Z80/xfer/`  | files to move in and out of CP/M, see below; the update menu stages its archive here |
 | `/Z80/fonts/` | `4X8.FNT`, `5X8.FNT`, `5X9.FNT`, `5X10.FNT`, `6X8.FNT` and any other fonts |
@@ -204,7 +204,9 @@ Case does not matter anywhere: FatFs matches names without regard to it, so
 `/z80/disks/cpm22.dsk` and `/Z80/DISKS/CPM22.DSK` are the same file. Names are
 always *shown* in upper case, which is how they look from CP/M.
 
-`dazzler.dsk` is the one to boot for the graphics demos.
+`DAZZLER.DSK` holds the graphics demos: put it in B: with `CPM22.DSK` in A:,
+change to B: and run one, `KSCOPE` for instance; the `.SUB` files show how
+the others are built or started.
 
 ### The NZ-COM disk
 
@@ -365,7 +367,8 @@ the 8. The scrollback history takes 1.25 MB after them, which leaves about
 
 Udo's `dazzler.c` retargeted from the Waveshare drawing calls. The pixel
 decoding is his, unchanged. What changed is where the pixels go. Ports 14 and
-15 are wired up, so Udo's `dazzler.dsk` works as it does on his machines.
+15 are wired up, so Udo's demo disk, `DAZZLER.DSK`, works as it does on his
+machines.
 
 The 128x128 image goes up at exactly 2x on the PicoCalc's square panel, centred with a 32
 pixel margin. Frames are composed into a 32 KB buffer and blitted a row at a
