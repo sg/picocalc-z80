@@ -8,7 +8,7 @@
 # Z80/VERSION.TXT holding $VERSION (default: git describe) is added.
 set -e
 
-DEPLOY=${DEPLOY:-$(cd "$(dirname "$0")/.." && pwd)/uf2-deploy}
+DEPLOY=${DEPLOY:-$(cd "$(dirname "$0")" && pwd)/dist}
 SRC=$(cd "$(dirname "$0")/sd_files" && pwd)
 VERSION=${VERSION:-$(git -C "$SRC" describe --tags --always --dirty=+ 2>/dev/null || echo unknown)}
 OUT=${1:-$DEPLOY/picocalc-z80-sd-files-$VERSION.tar.gz}

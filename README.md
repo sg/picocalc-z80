@@ -745,7 +745,7 @@ git clone --recurse-submodules https://github.com/sg/picocalc-z80.git
 
 `build.sh` builds one board or all of them, each in its own `build-<board>`
 directory, and copies `picocalc-z80-<board>-<version>.uf2` to `$DEPLOY`
-(default `../uf2-deploy`):
+(default `dist/` in the checkout):
 
 ```sh
 ./build.sh pim2w             # one board

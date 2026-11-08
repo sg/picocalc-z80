@@ -1,6 +1,7 @@
 *.swp
 /build/
 /build-*/
+/dist/
 .vscode
 __pycache__/
 

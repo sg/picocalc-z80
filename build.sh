@@ -2,10 +2,10 @@
 set -e
 
 # both can be overridden from the environment, which is how CI calls this;
-# the defaults sit beside this checkout, absolute as CMake wants the SDK's
-top=$(cd "$(dirname "$0")/.." && pwd)
-DEPLOY=${DEPLOY:-$top/uf2-deploy}
-PICO_SDK_PATH=${PICO_SDK_PATH:-$top/pico-sdk}
+# absolute, as CMake wants the SDK's and the copy runs from another directory
+here=$(cd "$(dirname "$0")" && pwd)
+DEPLOY=${DEPLOY:-$here/dist}
+PICO_SDK_PATH=${PICO_SDK_PATH:-$(dirname "$here")/pico-sdk}
 
 usage() {
     echo "Usage: $0 <board|all> [version]"
